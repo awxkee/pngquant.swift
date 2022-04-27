@@ -1,0 +1,4 @@
+module pngquantc {
+    umbrella header "PNGQuantBinding.h"
+    export *
+}
