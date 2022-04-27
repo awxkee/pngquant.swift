@@ -1,4 +1,5 @@
 import UIKit
+import Foundation
 import pngquantc
 
 public struct PNGQuantinizationError: Error, Equatable { }
