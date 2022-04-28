@@ -49,6 +49,7 @@ let package = Package(
             publicHeadersPath: "include",
             cSettings: [
                 .headerSearchPath("."),
+                .define("NDEBUG")
             ]
         ),
         .testTarget(
