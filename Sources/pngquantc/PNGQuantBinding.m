@@ -47,20 +47,28 @@ NSData * quantizedImageData(UIImage *image, int speed)
     
     unsigned char *bitmap = [image rgbaPixels];
     
+    unsigned char **rows = (unsigned char **)malloc(_height * sizeof(unsigned char *));
+    
+    for (int i = 0; i < _height; ++i)
+    {
+        rows[i] = (unsigned char *)&bitmap[i * _bytesPerRow];
+    }
+    
     size_t _gamma = 0;
     
     //create liq attribute
     liq_attr *liq = liq_attr_create();
     liq_set_speed(liq, MAX(MIN(speed, 10), 1));
     
-    liq_image *img = liq_image_create_rgba(liq,
-                                                (void *)bitmap,
+    liq_image *img = liq_image_create_rgba_rows(liq,
+                                                (void **)rows,
                                                 (int)_width,
                                                 (int)_height,
                                                 _gamma);
     
     if (!img)
     {
+        free(rows);
         free(bitmap);
         return nil;
     }
@@ -68,6 +76,7 @@ NSData * quantizedImageData(UIImage *image, int speed)
     liq_result *quantization_result;
     if (liq_image_quantize(img, liq, &quantization_result) != LIQ_OK)
     {
+        free(rows);
         free(bitmap);
         return nil;
     }
@@ -106,6 +115,7 @@ NSData * quantizedImageData(UIImage *image, int speed)
     if (out_state)
     {
         NSLog(@"error can't encode image %s", lodepng_error_text(out_state));
+        free(rows);
         if (raw_8bit_pixels) {
             free(raw_8bit_pixels);
         }
@@ -119,6 +129,7 @@ NSData * quantizedImageData(UIImage *image, int speed)
     liq_image_destroy(img);
     liq_attr_destroy(liq);
     
+    free(rows);
     free(raw_8bit_pixels);
     free(bitmap);
     
@@ -139,19 +150,27 @@ NSError * _Nullable quantizedImageTo(NSString * _Nonnull path, UIImage * _Nonnul
     
     unsigned char *bitmap = [image rgbaPixels];
     
+    unsigned char **rows = (unsigned char **)malloc(_height * sizeof(unsigned char *));
+    
+    for (int i = 0; i < _height; i++)
+    {
+        rows[i] = (unsigned char *)&bitmap[i * _bytesPerRow];
+    }
+    
     size_t _gamma = 0;
     
     //create liq attribute
     liq_attr *liq = liq_attr_create();
     liq_set_speed(liq, MAX(MIN(speed, 10), 1));
-    liq_image *img = liq_image_create_rgba(liq,
-                                                (void *)bitmap,
+    liq_image *img = liq_image_create_rgba_rows(liq,
+                                                (void **)rows,
                                                 (int)_width,
                                                 (int)_height,
                                                 _gamma);
     
     if (!img)
     {
+        free(rows);
         free(bitmap);
         return [[NSError alloc] initWithDomain:@"quantizedImageTo" code:500 userInfo:@{ NSLocalizedDescriptionKey: NSLocalizedString(@"`quantizedImageTo` failed with create image", nil) }];;
     }
@@ -159,6 +178,7 @@ NSError * _Nullable quantizedImageTo(NSString * _Nonnull path, UIImage * _Nonnul
     liq_result *quantization_result;
     if (liq_image_quantize(img, liq, &quantization_result) != LIQ_OK)
     {
+        free(rows);
         free(bitmap);
         return [[NSError alloc] initWithDomain:@"quantizedImageTo" code:500 userInfo:@{ NSLocalizedDescriptionKey: NSLocalizedString(@"`liq_image_quantize` failed", nil) }];;
     }
@@ -194,6 +214,7 @@ NSError * _Nullable quantizedImageTo(NSString * _Nonnull path, UIImage * _Nonnul
     
     if (out_state)
     {
+        free(rows);
         if (raw_8bit_pixels) {
             free(raw_8bit_pixels);
         }
@@ -203,6 +224,7 @@ NSError * _Nullable quantizedImageTo(NSString * _Nonnull path, UIImage * _Nonnul
     }
     
     if (lodepng_save_file(output_file_data, output_file_size, [path UTF8String]) != LIQ_OK) {
+        free(rows);
         free(raw_8bit_pixels);
         free(bitmap);
         return [[NSError alloc] initWithDomain:@"quantizedImageTo" code:500 userInfo:@{ NSLocalizedDescriptionKey: @"LODE PNG SAVE FILE ERROR" }];;
@@ -212,6 +234,7 @@ NSError * _Nullable quantizedImageTo(NSString * _Nonnull path, UIImage * _Nonnul
     liq_image_destroy(img);
     liq_attr_destroy(liq);
     
+    free(rows);
     free(raw_8bit_pixels);
     free(bitmap);
     
