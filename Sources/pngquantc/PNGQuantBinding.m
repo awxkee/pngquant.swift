@@ -156,23 +156,24 @@ NSData * quantizedImageData(UIImage *image, int speed)
 @implementation UIImage (ColorData)
 
 - (unsigned char *)rgbaPixels {
-    // First get the image into your data buffer
-    CGImageRef imageRef = [self CGImage];
-    NSUInteger width = CGImageGetWidth(imageRef);
-    NSUInteger height = CGImageGetHeight(imageRef);
+    int width = (int)(self.size.width * self.scale);
+    int height = (int)(self.size.height * self.scale);
+    int targetBytesPerRow = ((4 * (int)width) + 31) & (~31);
+    uint8_t *targetMemory = malloc((int)(targetBytesPerRow * height));
+    
     CGColorSpaceRef colorSpace = CGColorSpaceCreateDeviceRGB();
-    NSUInteger bytesPerPixel = 4;
-    unsigned char *rawData = (unsigned char*) malloc(height * width * bytesPerPixel * sizeof(unsigned char));
-    NSUInteger bytesPerRow = bytesPerPixel * width;
-    NSUInteger bitsPerComponent = 8;
-    CGContextRef context = CGBitmapContextCreate(rawData, width, height,
-                                                 bitsPerComponent, bytesPerRow, colorSpace,
-                                                 kCGImageAlphaPremultipliedLast | kCGBitmapByteOrder32Big);
+    CGBitmapInfo bitmapInfo = kCGImageAlphaPremultipliedLast | kCGBitmapByteOrder32Host;
+    
+    CGContextRef targetContext = CGBitmapContextCreate(targetMemory, width, height, 8, targetBytesPerRow, colorSpace, bitmapInfo);
+    
+    UIGraphicsPushContext(targetContext);
+    
     CGColorSpaceRelease(colorSpace);
-
-    CGContextDrawImage(context, CGRectMake(0, 0, width, height), imageRef);
-    CGContextRelease(context);
-    return rawData;
+    
+    CGContextDrawImage(targetContext, CGRectMake(0, 0, width, height), self.CGImage);
+    
+    UIGraphicsPopContext();
+    return targetMemory;
 }
 
 @end
@@ -201,7 +202,6 @@ NSError * _Nullable quantizedImageTo(NSString * _Nonnull path, UIImage * _Nonnul
     //create liq attribute
     liq_attr *liq = liq_attr_create();
     liq_set_speed(liq, MAX(MIN(speed, 10), 1));
-    
     liq_image *img = liq_image_create_rgba_rows(liq,
                                                 (void **)rows,
                                                 (int)_width,
