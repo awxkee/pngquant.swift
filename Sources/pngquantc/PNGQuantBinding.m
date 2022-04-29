@@ -157,47 +157,20 @@ NSError * _Nullable quantizedImageTo(NSString * _Nonnull path, UIImage * _Nonnul
 {
     CGImageRef imageRef = image.CGImage;
     
-    size_t _bitsPerPixel           = CGImageGetBitsPerPixel(imageRef);
-    size_t _bitsPerComponent       = CGImageGetBitsPerComponent(imageRef);
-    size_t _width                  = CGImageGetWidth(imageRef);
-    size_t _height                 = CGImageGetHeight(imageRef);
-    size_t _bytesPerRow            = CGImageGetBytesPerRow(imageRef);
-    CGBitmapInfo bitmapInfo = kCGImageAlphaPremultipliedLast;
-    
+    NSUInteger _width = CGImageGetWidth(imageRef);
+    NSUInteger _height = CGImageGetHeight(imageRef);
     CGColorSpaceRef colorSpace = CGColorSpaceCreateDeviceRGB();
-    
-    unsigned char *bitmapData = (unsigned char *)malloc(_bytesPerRow * _height);
-    
-    CGContextRef context = CGBitmapContextCreate(bitmapData,
-                                                 _width,
-                                                 _height,
-                                                 _bitsPerComponent,
-                                                 _bytesPerRow,
-                                                 colorSpace,
-                                                 bitmapInfo);
-    
+    unsigned char *rawData = (unsigned char*) calloc(_width * _height * 4, sizeof(unsigned char));
+    NSUInteger bytesPerPixel = 4;
+    NSUInteger bytesPerRow = bytesPerPixel * _width;
+    NSUInteger bitsPerComponent = 8;
+    CGContextRef context = CGBitmapContextCreate(rawData, _width, _height,
+                                                 bitsPerComponent, bytesPerRow, colorSpace,
+                                                 kCGImageAlphaPremultipliedLast | kCGBitmapByteOrder32Big);
     CGColorSpaceRelease(colorSpace);
     
-    //draw image
     CGContextDrawImage(context, CGRectMake(0, 0, _width, _height), imageRef);
-    
-    //free data
     CGContextRelease(context);
-    
-    //create NSData from bytes
-    NSData *data = [[NSData alloc] initWithBytes:bitmapData length:_bytesPerRow * _height];
-    
-    //check if free is needed
-    free(bitmapData);
-    
-    unsigned char *bitmap = (unsigned char *)[data bytes];
-    
-    unsigned char **rows = (unsigned char **)malloc(_height * sizeof(unsigned char *));
-    
-    for (int i = 0; i < _height; ++i)
-    {
-        rows[i] = (unsigned char *)&bitmap[i * _bytesPerRow];
-    }
     
     size_t _gamma = 0;
     
@@ -206,25 +179,27 @@ NSError * _Nullable quantizedImageTo(NSString * _Nonnull path, UIImage * _Nonnul
     liq_set_speed(liq, MAX(MIN(speed, 10), 1));
     
     liq_image *img = liq_image_create_rgba_rows(liq,
-                                                (void **)rows,
+                                                (void **)rawData,
                                                 (int)_width,
                                                 (int)_height,
                                                 _gamma);
     
     if (!img)
     {
+        free(rawData);
         return [[NSError alloc] initWithDomain:@"quantizedImageTo" code:500 userInfo:@{ NSLocalizedDescriptionKey: NSLocalizedString(@"`quantizedImageTo` failed with create image", nil) }];;
     }
     
     liq_result *quantization_result;
     if (liq_image_quantize(img, liq, &quantization_result) != LIQ_OK)
     {
+        free(rawData);
         return [[NSError alloc] initWithDomain:@"quantizedImageTo" code:500 userInfo:@{ NSLocalizedDescriptionKey: NSLocalizedString(@"`liq_image_quantize` failed", nil) }];;
     }
     
     // Use libimagequant to make new image pixels from the palette
-    bool doRows = (_bytesPerRow / 4 > _width);
-    size_t scanWidth = (doRows) ? (_bytesPerRow / 4) : _width;
+    bool doRows = (bytesPerRow / 4 > _width);
+    size_t scanWidth = (doRows) ? (bytesPerRow / 4) : _width;
     
     //create output data array
     size_t pixels_size = scanWidth * _height;
@@ -284,6 +259,7 @@ NSError * _Nullable quantizedImageTo(NSString * _Nonnull path, UIImage * _Nonnul
     }
     
     if (lodepng_save_file(output_file_data, output_file_size, [path UTF8String]) != LIQ_OK) {
+        free(rawData);
         return [[NSError alloc] initWithDomain:@"quantizedImageTo" code:500 userInfo:@{ NSLocalizedDescriptionKey: @"LODE PNG SAVE FILE ERROR" }];;
     }
     
@@ -291,7 +267,7 @@ NSError * _Nullable quantizedImageTo(NSString * _Nonnull path, UIImage * _Nonnul
     liq_image_destroy(img);
     liq_attr_destroy(liq);
     
-    free(rows);
+    free(rawData);
     free(raw_8bit_pixels);
     
     lodepng_state_cleanup(&state);
