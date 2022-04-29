@@ -161,7 +161,7 @@ NSData * quantizedImageData(UIImage *image, int speed)
     NSUInteger width = CGImageGetWidth(imageRef);
     NSUInteger height = CGImageGetHeight(imageRef);
     CGColorSpaceRef colorSpace = CGColorSpaceCreateDeviceRGB();
-    unsigned char *rawData = (unsigned char*) calloc(height * width * 4, sizeof(unsigned char));
+    unsigned char *rawData = (unsigned char*) malloc(height * width * 4 * sizeof(unsigned char));
     NSUInteger bytesPerPixel = 4;
     NSUInteger bytesPerRow = bytesPerPixel * width;
     NSUInteger bitsPerComponent = 8;
@@ -208,11 +208,10 @@ NSError * _Nullable quantizedImageTo(NSString * _Nonnull path, UIImage * _Nonnul
                                                 (int)_height,
                                                 _gamma);
     
-    free(bitmap);
-    
     if (!img)
     {
         free(rows);
+        free(bitmap);
         return [[NSError alloc] initWithDomain:@"quantizedImageTo" code:500 userInfo:@{ NSLocalizedDescriptionKey: NSLocalizedString(@"`quantizedImageTo` failed with create image", nil) }];;
     }
     
@@ -220,6 +219,7 @@ NSError * _Nullable quantizedImageTo(NSString * _Nonnull path, UIImage * _Nonnul
     if (liq_image_quantize(img, liq, &quantization_result) != LIQ_OK)
     {
         free(rows);
+        free(bitmap);
         return [[NSError alloc] initWithDomain:@"quantizedImageTo" code:500 userInfo:@{ NSLocalizedDescriptionKey: NSLocalizedString(@"`liq_image_quantize` failed", nil) }];;
     }
     
@@ -281,6 +281,7 @@ NSError * _Nullable quantizedImageTo(NSString * _Nonnull path, UIImage * _Nonnul
     if (out_state)
     {
         free(rows);
+        free(bitmap);
         NSLog(@"error can't encode image %s", lodepng_error_text(out_state));
         return [[NSError alloc] initWithDomain:@"quantizedImageTo" code:500 userInfo:@{ NSLocalizedDescriptionKey: [NSString stringWithUTF8String:lodepng_error_text(out_state)] }];;
     }
@@ -288,6 +289,7 @@ NSError * _Nullable quantizedImageTo(NSString * _Nonnull path, UIImage * _Nonnul
     if (lodepng_save_file(output_file_data, output_file_size, [path UTF8String]) != LIQ_OK) {
         free(rows);
         free(raw_8bit_pixels);
+        free(bitmap);
         return [[NSError alloc] initWithDomain:@"quantizedImageTo" code:500 userInfo:@{ NSLocalizedDescriptionKey: @"LODE PNG SAVE FILE ERROR" }];;
     }
     
@@ -297,6 +299,7 @@ NSError * _Nullable quantizedImageTo(NSString * _Nonnull path, UIImage * _Nonnul
     
     free(rows);
     free(raw_8bit_pixels);
+    free(bitmap);
     
     lodepng_state_cleanup(&state);
     
