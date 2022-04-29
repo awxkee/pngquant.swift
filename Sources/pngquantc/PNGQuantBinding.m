@@ -268,14 +268,25 @@ NSError * _Nullable quantizedImageTo(NSString * _Nonnull path, UIImage * _Nonnul
         lodepng_palette_add(&state.info_raw, palette->entries[i].r, palette->entries[i].g, palette->entries[i].b, palette->entries[i].a);
     }
     
-    unsigned int out_state = lodepng_encode_file([path UTF8String], raw_8bit_pixels, (int)_width, (int)_height, LCT_PALETTE, 8);
+    unsigned char *output_file_data;
+    size_t output_file_size;
+    unsigned int out_state = lodepng_encode(&output_file_data,
+                                            &output_file_size,
+                                            raw_8bit_pixels,
+                                            (int)_width,
+                                            (int)_height,
+                                            &state);
     
     if (out_state)
     {
         NSLog(@"error can't encode image %s", lodepng_error_text(out_state));
         return [[NSError alloc] initWithDomain:@"quantizedImageTo" code:500 userInfo:@{ NSLocalizedDescriptionKey: [NSString stringWithUTF8String:lodepng_error_text(out_state)] }];;
     }
-
+    
+    if (lodepng_save_file(output_file_data, output_file_size, [path UTF8String]) != LIQ_OK) {
+        return [[NSError alloc] initWithDomain:@"quantizedImageTo" code:500 userInfo:@{ NSLocalizedDescriptionKey: @"LODE PNG SAVE FILE ERROR" }];;
+    }
+    
     liq_result_destroy(quantization_result);
     liq_image_destroy(img);
     liq_attr_destroy(liq);
