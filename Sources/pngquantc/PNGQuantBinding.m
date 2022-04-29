@@ -12,24 +12,22 @@
 @implementation UIImage (ColorData)
 
 - (unsigned char *)rgbaPixels {
-    int width = (int)(self.size.width * self.scale);
-    int height = (int)(self.size.height * self.scale);
-    int targetBytesPerRow = ((4 * (int)width) + 31) & (~31);
-    uint8_t *targetMemory = malloc((int)(targetBytesPerRow * height));
-    
+    CGImageRef imageRef = [self CGImage];
+    NSUInteger width = CGImageGetWidth(imageRef);
+    NSUInteger height = CGImageGetHeight(imageRef);
     CGColorSpaceRef colorSpace = CGColorSpaceCreateDeviceRGB();
-    CGBitmapInfo bitmapInfo = kCGImageAlphaPremultipliedLast | kCGBitmapByteOrder32Host;
-    
-    CGContextRef targetContext = CGBitmapContextCreate(targetMemory, width, height, 8, targetBytesPerRow, colorSpace, bitmapInfo);
-    
-    UIGraphicsPushContext(targetContext);
-    
+    unsigned char *rawData = (unsigned char*) calloc(height * width * 4, sizeof(unsigned char));
+    NSUInteger bytesPerPixel = 4;
+    NSUInteger bytesPerRow = bytesPerPixel * width;
+    NSUInteger bitsPerComponent = 8;
+    CGContextRef context = CGBitmapContextCreate(rawData, width, height,
+                                                 bitsPerComponent, bytesPerRow, colorSpace,
+                                                 kCGImageAlphaPremultipliedLast | kCGBitmapByteOrder32Big);
     CGColorSpaceRelease(colorSpace);
     
-    CGContextDrawImage(targetContext, CGRectMake(0, 0, width, height), self.CGImage);
-    
-    UIGraphicsPopContext();
-    return targetMemory;
+    CGContextDrawImage(context, CGRectMake(0, 0, width, height), imageRef);
+    CGContextRelease(context);
+    return rawData;
 }
 
 @end
@@ -41,8 +39,8 @@ NSData * quantizedImageData(UIImage *image, int speed)
     
     size_t _bitsPerPixel           = CGImageGetBitsPerPixel(imageRef);
     size_t _bitsPerComponent       = CGImageGetBitsPerComponent(imageRef);
-    int _width = (int)(image.size.width * image.scale);
-    int _height = (int)(image.size.height * image.scale);
+    NSUInteger _width = CGImageGetWidth(imageRef);
+    NSUInteger _height = CGImageGetHeight(imageRef);
     size_t _bytesPerRow            = CGImageGetBytesPerRow(imageRef);
     
     unsigned char *bitmap = [image rgbaPixels];
@@ -60,11 +58,11 @@ NSData * quantizedImageData(UIImage *image, int speed)
     liq_attr *liq = liq_attr_create();
     liq_set_speed(liq, MAX(MIN(speed, 10), 1));
     
-    liq_image *img = liq_image_create_rgba_rows(liq,
-                                                (void **)rows,
-                                                (int)_width,
-                                                (int)_height,
-                                                _gamma);
+    liq_image *img = liq_image_create_rgba(liq,
+                                           (void **)rows,
+                                           (int)_width,
+                                           (int)_height,
+                                           _gamma);
     
     if (!img)
     {
@@ -150,27 +148,19 @@ NSError * _Nullable quantizedImageTo(NSString * _Nonnull path, UIImage * _Nonnul
     
     unsigned char *bitmap = [image rgbaPixels];
     
-    unsigned char **rows = (unsigned char **)malloc(_height * sizeof(unsigned char *));
-    
-    for (int i = 0; i < _height; i++)
-    {
-        rows[i] = (unsigned char *)&bitmap[i * _bytesPerRow];
-    }
-    
     size_t _gamma = 0;
     
     //create liq attribute
     liq_attr *liq = liq_attr_create();
     liq_set_speed(liq, MAX(MIN(speed, 10), 1));
-    liq_image *img = liq_image_create_rgba_rows(liq,
-                                                (void **)rows,
-                                                (int)_width,
-                                                (int)_height,
-                                                _gamma);
+    liq_image *img = liq_image_create_rgba(liq,
+                                           (void *)bitmap,
+                                           (int)_width,
+                                           (int)_height,
+                                           _gamma);
     
     if (!img)
     {
-        free(rows);
         free(bitmap);
         return [[NSError alloc] initWithDomain:@"quantizedImageTo" code:500 userInfo:@{ NSLocalizedDescriptionKey: NSLocalizedString(@"`quantizedImageTo` failed with create image", nil) }];;
     }
@@ -178,7 +168,6 @@ NSError * _Nullable quantizedImageTo(NSString * _Nonnull path, UIImage * _Nonnul
     liq_result *quantization_result;
     if (liq_image_quantize(img, liq, &quantization_result) != LIQ_OK)
     {
-        free(rows);
         free(bitmap);
         return [[NSError alloc] initWithDomain:@"quantizedImageTo" code:500 userInfo:@{ NSLocalizedDescriptionKey: NSLocalizedString(@"`liq_image_quantize` failed", nil) }];;
     }
@@ -214,7 +203,6 @@ NSError * _Nullable quantizedImageTo(NSString * _Nonnull path, UIImage * _Nonnul
     
     if (out_state)
     {
-        free(rows);
         if (raw_8bit_pixels) {
             free(raw_8bit_pixels);
         }
@@ -224,7 +212,6 @@ NSError * _Nullable quantizedImageTo(NSString * _Nonnull path, UIImage * _Nonnul
     }
     
     if (lodepng_save_file(output_file_data, output_file_size, [path UTF8String]) != LIQ_OK) {
-        free(rows);
         free(raw_8bit_pixels);
         free(bitmap);
         return [[NSError alloc] initWithDomain:@"quantizedImageTo" code:500 userInfo:@{ NSLocalizedDescriptionKey: @"LODE PNG SAVE FILE ERROR" }];;
@@ -234,7 +221,6 @@ NSError * _Nullable quantizedImageTo(NSString * _Nonnull path, UIImage * _Nonnul
     liq_image_destroy(img);
     liq_attr_destroy(liq);
     
-    free(rows);
     free(raw_8bit_pixels);
     free(bitmap);
     
