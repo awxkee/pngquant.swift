@@ -223,35 +223,11 @@ NSError * _Nullable quantizedImageTo(NSString * _Nonnull path, UIImage * _Nonnul
         return [[NSError alloc] initWithDomain:@"quantizedImageTo" code:500 userInfo:@{ NSLocalizedDescriptionKey: NSLocalizedString(@"`liq_image_quantize` failed", nil) }];;
     }
     
-    // Use libimagequant to make new image pixels from the palette
-    bool doRows = (_bytesPerRow / 4 > _width);
-    size_t scanWidth = (doRows) ? (_bytesPerRow / 4) : _width;
-    
-    //create output data array
-    size_t pixels_size = scanWidth * _height;
-    unsigned char *raw_8bit_pixels = (unsigned char *)malloc(pixels_size);
-    
+    size_t pixels_size = _width * _height;
+    unsigned char *raw_8bit_pixels = malloc(pixels_size);
     liq_set_dithering_level(quantization_result, 1.0);
-    
-    if (doRows)
-    {
-        unsigned char **rows_out = (unsigned char **)malloc(_height * sizeof(unsigned char *));
-        for (int i = 0; i < _height; ++i)
-            rows_out[i] = (unsigned char *)malloc(scanWidth);
-        
-        liq_write_remapped_image_rows(quantization_result, img, rows_out);
-        
-        //copy data to raw_8bit_pixels
-        for (int i = 0; i < _height; ++i)
-            memcpy(raw_8bit_pixels + i*(scanWidth), rows_out[i], scanWidth);
-        
-        free(rows_out);
-    }
-    else
-    {
-        liq_write_remapped_image(quantization_result, img, raw_8bit_pixels, pixels_size);
-    }
-    
+
+    liq_write_remapped_image(quantization_result, img, raw_8bit_pixels, pixels_size);
     const liq_palette *palette = liq_get_palette(quantization_result);
     
     //save convert pixels to png file
@@ -262,11 +238,9 @@ NSError * _Nullable quantizedImageTo(NSString * _Nonnull path, UIImage * _Nonnul
     state.info_png.color.colortype = LCT_PALETTE;
     state.info_png.color.bitdepth = 8;
     
-    for (size_t i = 0; i < palette->count; ++i)
-    {
-        lodepng_palette_add(&state.info_png.color, palette->entries[i].r, palette->entries[i].g, palette->entries[i].b, palette->entries[i].a);
-        
-        lodepng_palette_add(&state.info_raw, palette->entries[i].r, palette->entries[i].g, palette->entries[i].b, palette->entries[i].a);
+    for(int i=0; i < palette->count; i++) {
+       lodepng_palette_add(&state.info_png.color, palette->entries[i].r, palette->entries[i].g, palette->entries[i].b, palette->entries[i].a);
+       lodepng_palette_add(&state.info_raw, palette->entries[i].r, palette->entries[i].g, palette->entries[i].b, palette->entries[i].a);
     }
     
     unsigned char *output_file_data;
@@ -281,6 +255,7 @@ NSError * _Nullable quantizedImageTo(NSString * _Nonnull path, UIImage * _Nonnul
     if (out_state)
     {
         free(rows);
+        free(raw_8bit_pixels);
         free(bitmap);
         NSLog(@"error can't encode image %s", lodepng_error_text(out_state));
         return [[NSError alloc] initWithDomain:@"quantizedImageTo" code:500 userInfo:@{ NSLocalizedDescriptionKey: [NSString stringWithUTF8String:lodepng_error_text(out_state)] }];;
