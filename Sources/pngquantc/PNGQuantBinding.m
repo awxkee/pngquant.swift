@@ -9,6 +9,32 @@
 #include "libimagequant.h"
 #include "lodepng.h"
 
+@implementation UIImage (ColorData)
+
+- (unsigned char *)rgbaPixels {
+    int width = (int)(self.size.width * self.scale);
+    int height = (int)(self.size.height * self.scale);
+    int targetBytesPerRow = ((4 * (int)width) + 31) & (~31);
+    uint8_t *targetMemory = malloc((int)(targetBytesPerRow * height));
+    
+    CGColorSpaceRef colorSpace = CGColorSpaceCreateDeviceRGB();
+    CGBitmapInfo bitmapInfo = kCGImageAlphaPremultipliedLast | kCGBitmapByteOrder32Host;
+    
+    CGContextRef targetContext = CGBitmapContextCreate(targetMemory, width, height, 8, targetBytesPerRow, colorSpace, bitmapInfo);
+    
+    UIGraphicsPushContext(targetContext);
+    
+    CGColorSpaceRelease(colorSpace);
+    
+    CGContextDrawImage(targetContext, CGRectMake(0, 0, width, height), self.CGImage);
+    
+    UIGraphicsPopContext();
+    return targetMemory;
+}
+
+@end
+
+
 NSData * quantizedImageData(UIImage *image, int speed)
 {
     CGImageRef imageRef = image.CGImage;
@@ -18,35 +44,8 @@ NSData * quantizedImageData(UIImage *image, int speed)
     size_t _width                  = CGImageGetWidth(imageRef);
     size_t _height                 = CGImageGetHeight(imageRef);
     size_t _bytesPerRow            = CGImageGetBytesPerRow(imageRef);
-    CGBitmapInfo bitmapInfo = kCGImageAlphaPremultipliedLast;
     
-    CGColorSpaceRef colorSpace = CGColorSpaceCreateDeviceRGB();
-    
-    unsigned char *bitmapData = (unsigned char *)malloc(_bytesPerRow * _height);
-    
-    CGContextRef context = CGBitmapContextCreate(bitmapData,
-                                                 _width,
-                                                 _height,
-                                                 _bitsPerComponent,
-                                                 _bytesPerRow,
-                                                 colorSpace,
-                                                 bitmapInfo);
-    
-    CGColorSpaceRelease(colorSpace);
-    
-    //draw image
-    CGContextDrawImage(context, CGRectMake(0, 0, _width, _height), imageRef);
-    
-    //free data
-    CGContextRelease(context);
-    
-    //create NSData from bytes
-    NSData *data = [[NSData alloc] initWithBytes:bitmapData length:_bytesPerRow * _height];
-    
-    //check if free is needed
-    free(bitmapData);
-    
-    unsigned char *bitmap = (unsigned char *)[data bytes];
+    unsigned char *bitmap = [image rgbaPixels];
     
     unsigned char **rows = (unsigned char **)malloc(_height * sizeof(unsigned char *));
     
@@ -69,44 +68,24 @@ NSData * quantizedImageData(UIImage *image, int speed)
     
     if (!img)
     {
+        free(rows);
+        free(bitmap);
         return nil;
     }
     
     liq_result *quantization_result;
     if (liq_image_quantize(img, liq, &quantization_result) != LIQ_OK)
     {
+        free(rows);
+        free(bitmap);
         return nil;
     }
     
-    // Use libimagequant to make new image pixels from the palette
-    bool doRows = (_bytesPerRow / 4 > _width);
-    size_t scanWidth = (doRows) ? (_bytesPerRow / 4) : _width;
-    
-    //create output data array
-    size_t pixels_size = scanWidth * _height;
-    unsigned char *raw_8bit_pixels = (unsigned char *)malloc(pixels_size);
-    
+    size_t pixels_size = _width * _height;
+    unsigned char *raw_8bit_pixels = malloc(pixels_size);
     liq_set_dithering_level(quantization_result, 1.0);
-    
-    if (doRows)
-    {
-        unsigned char **rows_out = (unsigned char **)malloc(_height * sizeof(unsigned char *));
-        for (int i = 0; i < _height; ++i)
-            rows_out[i] = (unsigned char *)malloc(scanWidth);
-        
-        liq_write_remapped_image_rows(quantization_result, img, rows_out);
-        
-        //copy data to raw_8bit_pixels
-        for (int i = 0; i < _height; ++i)
-            memcpy(raw_8bit_pixels + i*(scanWidth), rows_out[i], scanWidth);
-        
-        free(rows_out);
-    }
-    else
-    {
-        liq_write_remapped_image(quantization_result, img, raw_8bit_pixels, pixels_size);
-    }
-    
+
+    liq_write_remapped_image(quantization_result, img, raw_8bit_pixels, pixels_size);
     const liq_palette *palette = liq_get_palette(quantization_result);
     
     //save convert pixels to png file
@@ -136,6 +115,11 @@ NSData * quantizedImageData(UIImage *image, int speed)
     if (out_state)
     {
         NSLog(@"error can't encode image %s", lodepng_error_text(out_state));
+        free(rows);
+        if (raw_8bit_pixels) {
+            free(raw_8bit_pixels);
+        }
+        free(bitmap);
         return nil;
     }
     
@@ -147,36 +131,12 @@ NSData * quantizedImageData(UIImage *image, int speed)
     
     free(rows);
     free(raw_8bit_pixels);
+    free(bitmap);
     
     lodepng_state_cleanup(&state);
     
     return data_out;
 }
-
-@implementation UIImage (ColorData)
-
-- (unsigned char *)rgbaPixels {
-    int width = (int)(self.size.width * self.scale);
-    int height = (int)(self.size.height * self.scale);
-    int targetBytesPerRow = ((4 * (int)width) + 31) & (~31);
-    uint8_t *targetMemory = malloc((int)(targetBytesPerRow * height));
-    
-    CGColorSpaceRef colorSpace = CGColorSpaceCreateDeviceRGB();
-    CGBitmapInfo bitmapInfo = kCGImageAlphaPremultipliedLast | kCGBitmapByteOrder32Host;
-    
-    CGContextRef targetContext = CGBitmapContextCreate(targetMemory, width, height, 8, targetBytesPerRow, colorSpace, bitmapInfo);
-    
-    UIGraphicsPushContext(targetContext);
-    
-    CGColorSpaceRelease(colorSpace);
-    
-    CGContextDrawImage(targetContext, CGRectMake(0, 0, width, height), self.CGImage);
-    
-    UIGraphicsPopContext();
-    return targetMemory;
-}
-
-@end
 
 NSError * _Nullable quantizedImageTo(NSString * _Nonnull path, UIImage * _Nonnull image, int speed)
 {
@@ -255,7 +215,9 @@ NSError * _Nullable quantizedImageTo(NSString * _Nonnull path, UIImage * _Nonnul
     if (out_state)
     {
         free(rows);
-        free(raw_8bit_pixels);
+        if (raw_8bit_pixels) {
+            free(raw_8bit_pixels);
+        }
         free(bitmap);
         NSLog(@"error can't encode image %s", lodepng_error_text(out_state));
         return [[NSError alloc] initWithDomain:@"quantizedImageTo" code:500 userInfo:@{ NSLocalizedDescriptionKey: [NSString stringWithUTF8String:lodepng_error_text(out_state)] }];;
