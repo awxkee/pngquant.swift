@@ -39,18 +39,11 @@ NSData * quantizedImageData(UIImage *image, int speed)
     
     size_t _bitsPerPixel           = CGImageGetBitsPerPixel(imageRef);
     size_t _bitsPerComponent       = CGImageGetBitsPerComponent(imageRef);
-    NSUInteger _width = CGImageGetWidth(imageRef);
-    NSUInteger _height = CGImageGetHeight(imageRef);
+    int _width = (int)(image.size.width * image.scale);
+    int _height = (int)(image.size.height * image.scale);
     size_t _bytesPerRow            = CGImageGetBytesPerRow(imageRef);
     
     unsigned char *bitmap = [image rgbaPixels];
-    
-    unsigned char **rows = (unsigned char **)malloc(_height * sizeof(unsigned char *));
-    
-    for (int i = 0; i < _height; ++i)
-    {
-        rows[i] = (unsigned char *)&bitmap[i * _bytesPerRow];
-    }
     
     size_t _gamma = 0;
     
@@ -59,14 +52,13 @@ NSData * quantizedImageData(UIImage *image, int speed)
     liq_set_speed(liq, MAX(MIN(speed, 10), 1));
     
     liq_image *img = liq_image_create_rgba(liq,
-                                           (void **)rows,
+                                           (void **)bitmap,
                                            (int)_width,
                                            (int)_height,
                                            _gamma);
     
     if (!img)
     {
-        free(rows);
         free(bitmap);
         return nil;
     }
@@ -74,7 +66,6 @@ NSData * quantizedImageData(UIImage *image, int speed)
     liq_result *quantization_result;
     if (liq_image_quantize(img, liq, &quantization_result) != LIQ_OK)
     {
-        free(rows);
         free(bitmap);
         return nil;
     }
@@ -113,7 +104,6 @@ NSData * quantizedImageData(UIImage *image, int speed)
     if (out_state)
     {
         NSLog(@"error can't encode image %s", lodepng_error_text(out_state));
-        free(rows);
         if (raw_8bit_pixels) {
             free(raw_8bit_pixels);
         }
@@ -127,7 +117,6 @@ NSData * quantizedImageData(UIImage *image, int speed)
     liq_image_destroy(img);
     liq_attr_destroy(liq);
     
-    free(rows);
     free(raw_8bit_pixels);
     free(bitmap);
     
