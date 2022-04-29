@@ -153,6 +153,30 @@ NSData * quantizedImageData(UIImage *image, int speed)
     return data_out;
 }
 
+@implementation UIImage (ColorData)
+
+- (unsigned char *)rgbaPixels {
+    // First get the image into your data buffer
+    CGImageRef imageRef = [self CGImage];
+    NSUInteger width = CGImageGetWidth(imageRef);
+    NSUInteger height = CGImageGetHeight(imageRef);
+    CGColorSpaceRef colorSpace = CGColorSpaceCreateDeviceRGB();
+    unsigned char *rawData = (unsigned char*) calloc(height * width * 4, sizeof(unsigned char));
+    NSUInteger bytesPerPixel = 4;
+    NSUInteger bytesPerRow = bytesPerPixel * width;
+    NSUInteger bitsPerComponent = 8;
+    CGContextRef context = CGBitmapContextCreate(rawData, width, height,
+                                                 bitsPerComponent, bytesPerRow, colorSpace,
+                                                 kCGImageAlphaPremultipliedLast | kCGBitmapByteOrder32Big);
+    CGColorSpaceRelease(colorSpace);
+
+    CGContextDrawImage(context, CGRectMake(0, 0, width, height), imageRef);
+    CGContextRelease(context);
+    return rawData;
+}
+
+@end
+
 NSError * _Nullable quantizedImageTo(NSString * _Nonnull path, UIImage * _Nonnull image, int speed)
 {
     CGImageRef imageRef = image.CGImage;
@@ -162,29 +186,7 @@ NSError * _Nullable quantizedImageTo(NSString * _Nonnull path, UIImage * _Nonnul
     size_t _width                  = CGImageGetWidth(imageRef);
     size_t _height                 = CGImageGetHeight(imageRef);
     size_t _bytesPerRow            = CGImageGetBytesPerRow(imageRef);
-    CGBitmapInfo bitmapInfo = kCGImageAlphaPremultipliedLast;
-    
-    CGColorSpaceRef colorSpace = CGColorSpaceCreateDeviceRGB();
-    
-    unsigned char *bitmapData = (unsigned char *)malloc(_bytesPerRow * _height);
-    
-    CGContextRef context = CGBitmapContextCreate(bitmapData,
-                                                 _width,
-                                                 _height,
-                                                 _bitsPerComponent,
-                                                 _bytesPerRow,
-                                                 colorSpace,
-                                                 bitmapInfo);
-    
-    CGColorSpaceRelease(colorSpace);
-    
-    //draw image
-    CGContextDrawImage(context, CGRectMake(0, 0, _width, _height), imageRef);
-    
-    //free data
-    CGContextRelease(context);
-    
-    unsigned char *bitmap = (unsigned char *)bitmapData;
+    unsigned char *bitmap = [image rgbaPixels];
 
     size_t _gamma = 0;
     
@@ -193,7 +195,7 @@ NSError * _Nullable quantizedImageTo(NSString * _Nonnull path, UIImage * _Nonnul
     liq_set_speed(liq, MAX(MIN(speed, 10), 1));
     
     liq_image *img = liq_image_create_rgba_rows(liq,
-                                                (void **)&bitmap,
+                                                (void **)bitmap,
                                                 (int)_width,
                                                 (int)_height,
                                                 _gamma);
