@@ -161,8 +161,8 @@ NSData * quantizedImageData(UIImage *image, int speed)
     NSUInteger width = CGImageGetWidth(imageRef);
     NSUInteger height = CGImageGetHeight(imageRef);
     CGColorSpaceRef colorSpace = CGColorSpaceCreateDeviceRGB();
-    unsigned char *rawData = (unsigned char*) malloc(height * width * 4 * sizeof(unsigned char));
     NSUInteger bytesPerPixel = 4;
+    unsigned char *rawData = (unsigned char*) malloc(height * width * bytesPerPixel * sizeof(unsigned char));
     NSUInteger bytesPerRow = bytesPerPixel * width;
     NSUInteger bitsPerComponent = 8;
     CGContextRef context = CGBitmapContextCreate(rawData, width, height,
@@ -191,7 +191,7 @@ NSError * _Nullable quantizedImageTo(NSString * _Nonnull path, UIImage * _Nonnul
     
     unsigned char **rows = (unsigned char **)malloc(_height * sizeof(unsigned char *));
     
-    for (int i = 0; i < _height; ++i)
+    for (int i = 0; i < _height; i++)
     {
         rows[i] = (unsigned char *)&bitmap[i * _bytesPerRow];
     }
