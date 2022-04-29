@@ -41,8 +41,8 @@ NSData * quantizedImageData(UIImage *image, int speed)
     
     size_t _bitsPerPixel           = CGImageGetBitsPerPixel(imageRef);
     size_t _bitsPerComponent       = CGImageGetBitsPerComponent(imageRef);
-    size_t _width                  = CGImageGetWidth(imageRef);
-    size_t _height                 = CGImageGetHeight(imageRef);
+    int _width = (int)(image.size.width * image.scale);
+    int _height = (int)(image.size.height * image.scale);
     size_t _bytesPerRow            = CGImageGetBytesPerRow(imageRef);
     
     unsigned char *bitmap = [image rgbaPixels];
@@ -84,7 +84,7 @@ NSData * quantizedImageData(UIImage *image, int speed)
     size_t pixels_size = _width * _height;
     unsigned char *raw_8bit_pixels = malloc(pixels_size);
     liq_set_dithering_level(quantization_result, 1.0);
-
+    
     liq_write_remapped_image(quantization_result, img, raw_8bit_pixels, pixels_size);
     const liq_palette *palette = liq_get_palette(quantization_result);
     
@@ -144,8 +144,8 @@ NSError * _Nullable quantizedImageTo(NSString * _Nonnull path, UIImage * _Nonnul
     
     size_t _bitsPerPixel           = CGImageGetBitsPerPixel(imageRef);
     size_t _bitsPerComponent       = CGImageGetBitsPerComponent(imageRef);
-    size_t _width                  = CGImageGetWidth(imageRef);
-    size_t _height                 = CGImageGetHeight(imageRef);
+    int _width = (int)(image.size.width * image.scale);
+    int _height = (int)(image.size.height * image.scale);
     size_t _bytesPerRow            = CGImageGetBytesPerRow(imageRef);
     
     unsigned char *bitmap = [image rgbaPixels];
@@ -156,7 +156,7 @@ NSError * _Nullable quantizedImageTo(NSString * _Nonnull path, UIImage * _Nonnul
     {
         rows[i] = (unsigned char *)&bitmap[i * _bytesPerRow];
     }
-
+    
     size_t _gamma = 0;
     
     //create liq attribute
@@ -186,7 +186,7 @@ NSError * _Nullable quantizedImageTo(NSString * _Nonnull path, UIImage * _Nonnul
     size_t pixels_size = _width * _height;
     unsigned char *raw_8bit_pixels = malloc(pixels_size);
     liq_set_dithering_level(quantization_result, 1.0);
-
+    
     liq_write_remapped_image(quantization_result, img, raw_8bit_pixels, pixels_size);
     const liq_palette *palette = liq_get_palette(quantization_result);
     
@@ -199,8 +199,8 @@ NSError * _Nullable quantizedImageTo(NSString * _Nonnull path, UIImage * _Nonnul
     state.info_png.color.bitdepth = 8;
     
     for(int i=0; i < palette->count; i++) {
-       lodepng_palette_add(&state.info_png.color, palette->entries[i].r, palette->entries[i].g, palette->entries[i].b, palette->entries[i].a);
-       lodepng_palette_add(&state.info_raw, palette->entries[i].r, palette->entries[i].g, palette->entries[i].b, palette->entries[i].a);
+        lodepng_palette_add(&state.info_png.color, palette->entries[i].r, palette->entries[i].g, palette->entries[i].b, palette->entries[i].a);
+        lodepng_palette_add(&state.info_raw, palette->entries[i].r, palette->entries[i].g, palette->entries[i].b, palette->entries[i].a);
     }
     
     unsigned char *output_file_data;
