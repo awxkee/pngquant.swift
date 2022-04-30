@@ -56,7 +56,6 @@ let package = Package(
             cSettings: [
                 .headerSearchPath("."),
                 .define("NDEBUG"),
-                .unsafeFlags(["-suppress-warnings"]),
             ]
         ),
         .testTarget(
