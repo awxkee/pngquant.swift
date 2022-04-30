@@ -90,44 +90,47 @@
 /* from pam.h */
 
 typedef struct {
-    unsigned char r, g, b, a;
-} rgba_pixel;
-
-typedef struct {
     float a, r, g, b;
 } SSE_ALIGN f_pixel;
 
-static const float internal_gamma = 0.5499f;
+static const float internal_gamma = 0.57f;
 
 LIQ_PRIVATE void to_f_set_gamma(float gamma_lut[], const double gamma);
+
+#define MIN_OPAQUE_A (1.f / 256.f * LIQ_WEIGHT_A)
+
+#define LIQ_WEIGHT_A 0.625f
+#define LIQ_WEIGHT_R 0.5f
+#define LIQ_WEIGHT_G 1.0f
+#define LIQ_WEIGHT_B 0.45f
+#define LIQ_WEIGHT_MSE 0.45 // fudge factor for compensating that colors aren't 0..1 range
 
 /**
  Converts 8-bit color to internal gamma and premultiplied alpha.
  (premultiplied color space is much better for blending of semitransparent colors)
  */
-ALWAYS_INLINE static f_pixel rgba_to_f(const float gamma_lut[], const rgba_pixel px);
-inline static f_pixel rgba_to_f(const float gamma_lut[], const rgba_pixel px)
+ALWAYS_INLINE static f_pixel rgba_to_f(const float gamma_lut[], const liq_color px);
+inline static f_pixel rgba_to_f(const float gamma_lut[], const liq_color px)
 {
     float a = px.a/255.f;
 
     return (f_pixel) {
-        .a = a,
-        .r = gamma_lut[px.r]*a,
-        .g = gamma_lut[px.g]*a,
-        .b = gamma_lut[px.b]*a,
+        .a = a * LIQ_WEIGHT_A,
+        .r = gamma_lut[px.r] * LIQ_WEIGHT_R * a,
+        .g = gamma_lut[px.g] * LIQ_WEIGHT_G * a,
+        .b = gamma_lut[px.b] * LIQ_WEIGHT_B * a,
     };
 }
 
-inline static rgba_pixel f_to_rgb(const float gamma, const f_pixel px)
+inline static liq_color f_to_rgb(const float gamma, const f_pixel px)
 {
-    if (px.a < 1.f/256.f) {
-        return (rgba_pixel){0,0,0,0};
+    if (px.a < MIN_OPAQUE_A) {
+        return (liq_color){0,0,0,0};
     }
 
-    float r = px.r / px.a,
-          g = px.g / px.a,
-          b = px.b / px.a,
-          a = px.a;
+    float r = (LIQ_WEIGHT_A / LIQ_WEIGHT_R) * px.r / px.a,
+          g = (LIQ_WEIGHT_A / LIQ_WEIGHT_G) * px.g / px.a,
+          b = (LIQ_WEIGHT_A / LIQ_WEIGHT_B) * px.b / px.a;
 
     r = powf(r, gamma/internal_gamma);
     g = powf(g, gamma/internal_gamma);
@@ -137,9 +140,9 @@ inline static rgba_pixel f_to_rgb(const float gamma, const f_pixel px)
     r *= 256.f;
     g *= 256.f;
     b *= 256.f;
-    a *= 256.f;
+    float a = (256.f / LIQ_WEIGHT_A) * px.a;
 
-    return (rgba_pixel){
+    return (liq_color){
         .r = r>=255.f ? 255 : r,
         .g = g>=255.f ? 255 : g,
         .b = b>=255.f ? 255 : b,
@@ -147,12 +150,12 @@ inline static rgba_pixel f_to_rgb(const float gamma, const f_pixel px)
     };
 }
 
-ALWAYS_INLINE static double colordifference_ch(const double x, const double y, const double alphas);
-inline static double colordifference_ch(const double x, const double y, const double alphas)
+ALWAYS_INLINE static float colordifference_ch(const float x, const float y, const float alphas);
+inline static float colordifference_ch(const float x, const float y, const float alphas)
 {
     // maximum of channel blended on white, and blended on black
     // premultiplied alpha and backgrounds 0/1 shorten the formula
-    const double black = x-y, white = black+alphas;
+    const float black = x-y, white = black+alphas;
     return MAX(black*black, white*white);
 }
 
@@ -172,7 +175,7 @@ inline static float colordifference_stdc(const f_pixel px, const f_pixel py)
     // (px.rgb - px.a) - (py.rgb - py.a)
     // (px.rgb - py.rgb) + (py.a - px.a)
 
-    const double alphas = py.a-px.a;
+    const float alphas = py.a-px.a;
     return colordifference_ch(px.r, py.r, alphas) +
            colordifference_ch(px.g, py.g, alphas) +
            colordifference_ch(px.b, py.b, alphas);
@@ -182,8 +185,17 @@ ALWAYS_INLINE static float colordifference(f_pixel px, f_pixel py);
 inline static float colordifference(f_pixel px, f_pixel py)
 {
 #if USE_SSE
+#ifdef _MSC_VER
+    /* In MSVC we cannot use the align attribute in parameters.
+     * This is used a lot, so we just use an unaligned load.
+     * Also the compiler incorrectly inlines vpx and vpy without
+     * the volatile when optimization is applied for x86_64. */
+    const volatile __m128 vpx = _mm_loadu_ps((const float*)&px);
+    const volatile __m128 vpy = _mm_loadu_ps((const float*)&py);
+#else
     const __m128 vpx = _mm_load_ps((const float*)&px);
     const __m128 vpy = _mm_load_ps((const float*)&py);
+#endif
 
     // y.a - x.a
     __m128 alphas = _mm_sub_ss(vpy, vpx);
@@ -211,7 +223,7 @@ inline static float colordifference(f_pixel px, f_pixel py)
 
 /* from pamcmap.h */
 union rgba_as_int {
-    rgba_pixel rgba;
+    liq_color rgba;
     unsigned int l;
 };
 
@@ -227,12 +239,25 @@ typedef struct {
     } tmp;
 } hist_item;
 
+#define LIQ_MAXCLUSTER 16
+
+struct temp_hist_item {
+    liq_color color;
+    float weight;
+    short cluster;
+};
+
+struct histogram_box {
+    int begin, end;
+};
+
 typedef struct {
     hist_item *achv;
     void (*free)(void*);
     double total_perceptual_weight;
     unsigned int size;
     unsigned int ignorebits;
+    struct histogram_box boxes[LIQ_MAXCLUSTER];
 } histogram;
 
 typedef struct {
@@ -271,13 +296,17 @@ struct acolorhash_table {
 LIQ_PRIVATE void pam_freeacolorhash(struct acolorhash_table *acht);
 LIQ_PRIVATE struct acolorhash_table *pam_allocacolorhash(unsigned int maxcolors, unsigned int surface, unsigned int ignorebits, void* (*malloc)(size_t), void (*free)(void*));
 LIQ_PRIVATE histogram *pam_acolorhashtoacolorhist(const struct acolorhash_table *acht, const double gamma, void* (*malloc)(size_t), void (*free)(void*));
-LIQ_PRIVATE bool pam_computeacolorhash(struct acolorhash_table *acht, const rgba_pixel *const pixels[], unsigned int cols, unsigned int rows, const unsigned char *importance_map);
+LIQ_PRIVATE bool pam_computeacolorhash(struct acolorhash_table *acht, const liq_color *const pixels[], unsigned int cols, unsigned int rows, const unsigned char *importance_map);
 LIQ_PRIVATE bool pam_add_to_hash(struct acolorhash_table *acht, unsigned int hash, unsigned int boost, union rgba_as_int px, unsigned int row, unsigned int rows);
 
 LIQ_PRIVATE void pam_freeacolorhist(histogram *h);
 
-LIQ_PRIVATE colormap *pam_colormap(unsigned int colors, void* (*malloc)(size_t), void (*free)(void*));
-LIQ_PRIVATE colormap *pam_duplicate_colormap(colormap *map);
+LIQ_PRIVATE colormap *pam_colormap(unsigned int colors, void* (*malloc)(size_t), void (*free)(void*)) LIQ_NONNULL;
+LIQ_PRIVATE colormap *pam_duplicate_colormap(colormap *map) LIQ_NONNULL;
 LIQ_PRIVATE void pam_freecolormap(colormap *c);
+
+LIQ_PRIVATE void remove_fixed_colors_from_histogram(histogram *hist, const int fixed_colors_count, const f_pixel fixed_colors[], const float target_mse) LIQ_NONNULL;
+LIQ_PRIVATE colormap *histogram_to_palette(const histogram *hist, void* (*malloc)(size_t), void (*free)(void*)) LIQ_NONNULL;
+LIQ_PRIVATE void hist_reset_colors(const histogram *hist, const unsigned int colors) LIQ_NONNULL;
 
 #endif

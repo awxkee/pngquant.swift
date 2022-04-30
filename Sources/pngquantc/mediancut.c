@@ -25,34 +25,26 @@ struct box {
     unsigned int colors;
 };
 
-ALWAYS_INLINE static double variance_diff(double val, const double good_enough);
-inline static double variance_diff(double val, const double good_enough)
-{
-    val *= val;
-    if (val < good_enough*good_enough) return val*0.25;
-    return val;
-}
-
 /** Weighted per-channel variance of the box. It's used to decide which channel to split by */
 static f_pixel box_variance(const hist_item achv[], const struct box *box)
 {
-    f_pixel mean = box->color;
+    const f_pixel mean = box->color;
     double variancea=0, variancer=0, varianceg=0, varianceb=0;
 
     for(unsigned int i = 0; i < box->colors; ++i) {
         const f_pixel px = achv[box->ind + i].acolor;
         double weight = achv[box->ind + i].adjusted_weight;
-        variancea += variance_diff(mean.a - px.a, 2.0/256.0)*weight;
-        variancer += variance_diff(mean.r - px.r, 1.0/256.0)*weight;
-        varianceg += variance_diff(mean.g - px.g, 1.0/256.0)*weight;
-        varianceb += variance_diff(mean.b - px.b, 1.0/256.0)*weight;
+        variancea += (mean.a - px.a)*(mean.a - px.a)*weight;
+        variancer += (mean.r - px.r)*(mean.r - px.r)*weight;
+        varianceg += (mean.g - px.g)*(mean.g - px.g)*weight;
+        varianceb += (mean.b - px.b)*(mean.b - px.b)*weight;
     }
 
     return (f_pixel){
-        .a = variancea*(4.0/16.0),
-        .r = variancer*(7.0/16.0),
-        .g = varianceg*(9.0/16.0),
-        .b = varianceb*(5.0/16.0),
+        .a = variancea,
+        .r = variancer,
+        .g = varianceg,
+        .b = varianceb,
     };
 }
 
@@ -133,35 +125,37 @@ static void hist_item_sort_range(hist_item base[], unsigned int len, unsigned in
     }
 }
 
-/** sorts array to make sum of weights lower than halfvar one side, returns edge between <halfvar and >halfvar parts of the set */
-static hist_item *hist_item_sort_halfvar(hist_item base[], unsigned int len, double *const lowervar, const double halfvar)
+/** sorts array to make sum of weights lower than halfvar one side, returns index of the edge between <halfvar and >halfvar parts of the set */
+static unsigned int hist_item_sort_halfvar(hist_item base[], unsigned int len, double halfvar)
 {
+    unsigned int base_idx = 0;  // track base-index
     do {
         const unsigned int l = qsort_partition(base, len), r = l+1;
 
         // check if sum of left side is smaller than half,
         // if it is, then it doesn't need to be sorted
-        unsigned int t = 0; double tmpsum = *lowervar;
-        while (t <= l && tmpsum < halfvar) tmpsum += base[t++].color_weight;
+        double tmpsum = 0.;
+        for(unsigned int t = 0; t <= l && tmpsum < halfvar; ++t) tmpsum += base[t].color_weight;
 
-        if (tmpsum < halfvar) {
-            *lowervar = tmpsum;
-        } else {
+        // the split is on the left part
+        if (tmpsum >= halfvar) {
             if (l > 0) {
-                hist_item *res = hist_item_sort_halfvar(base, l, lowervar, halfvar);
-                if (res) return res;
+                len = l;
+                continue;
             } else {
-                // End of left recursion. This will be executed in order from the first element.
-                *lowervar += base[0].color_weight;
-                if (*lowervar > halfvar) return &base[0];
+                // reached the end of left part
+                return base_idx;
             }
         }
-
+        // process the right part
+        halfvar -= tmpsum;
         if (len > r) {
-            base += r; len -= r; // tail-recursive "call"
+            base += r;
+            base_idx += r;
+            len -= r; // tail-recursive "call"
         } else {
-            *lowervar += base[r].color_weight;
-            return (*lowervar > halfvar) ? &base[r] : NULL;
+            // reached the end of the right part
+            return base_idx + len;
         }
     } while(1);
 }
@@ -195,7 +189,7 @@ static double prepare_sort(struct box *b, hist_item achv[])
 
     const unsigned int ind1 = b->ind;
     const unsigned int colors = b->colors;
-#if __GNUC__ >= 9
+#if __GNUC__ >= 9 || __clang__
     #pragma omp parallel for if (colors > 25000) \
         schedule(static) default(none) shared(achv, channels, colors, ind1)
 #else
@@ -310,15 +304,16 @@ static bool total_box_error_below_target(double target_mse, struct box bv[], uns
 }
 
 static void box_init(struct box *box, const hist_item *achv, const unsigned int ind, const unsigned int colors, const double sum) {
+    assert(colors > 0);
+    assert(sum > 0);
+
     box->ind = ind;
     box->colors = colors;
     box->sum = sum;
     box->total_error = -1;
 
     box->color = averagepixels(colors, &achv[ind]);
-    #pragma omp task if (colors > 5000)
     box->variance = box_variance(achv, box);
-    #pragma omp task if (colors > 8000)
     box->max_error = box_max_error(achv, box);
 }
 
@@ -330,23 +325,35 @@ static void box_init(struct box *box, const hist_item *achv, const unsigned int 
 LIQ_PRIVATE colormap *mediancut(histogram *hist, unsigned int newcolors, const double target_mse, const double max_mse, void* (*malloc)(size_t), void (*free)(void*))
 {
     hist_item *achv = hist->achv;
-    LIQ_ARRAY(struct box, bv, newcolors);
-    unsigned int boxes = 1;
+    struct box bv[newcolors+16];
 
-    /*
-     ** Set up the initial box.
-     */
-    #pragma omp parallel
-    #pragma omp single
-    {
+    assert(hist->boxes[0].begin == 0);
+    assert(hist->boxes[LIQ_MAXCLUSTER-1].end == hist->size);
+
+    unsigned int boxes = 0;
+    for(int b=0; b < LIQ_MAXCLUSTER; b++) {
+        int begin = hist->boxes[b].begin;
+        int end = hist->boxes[b].end;
+        if (begin == end) {
+            continue;
+        }
+
+        if (boxes >= newcolors/3) {
+            boxes = 0;
+            begin = 0;
+            end = hist->boxes[LIQ_MAXCLUSTER-1].end;
+            b = LIQ_MAXCLUSTER;
+        }
+
         double sum = 0;
-        for(unsigned int i=0; i < hist->size; i++) {
+        for(int i=begin; i < end; i++) {
             sum += achv[i].adjusted_weight;
         }
-        #pragma omp taskgroup
-        {
-            box_init(&bv[0], achv, 0, hist->size, sum);
-        }
+        box_init(&bv[boxes], achv, begin, end-begin, sum);
+        boxes++;
+    }
+
+    assert(boxes < newcolors);
 
 
         /*
@@ -377,12 +384,11 @@ LIQ_PRIVATE colormap *mediancut(histogram *hist, unsigned int newcolors, const d
              */
 
             const double halfvar = prepare_sort(&bv[bi], achv);
-            double lowervar=0;
 
             // hist_item_sort_halfvar sorts and sums lowervar at the same time
             // returns item to break at …minus one, which does smell like an off-by-one error.
-            hist_item *break_p = hist_item_sort_halfvar(&achv[indx], clrs, &lowervar, halfvar);
-            unsigned int break_at = MIN(clrs-1, (unsigned int)(break_p - &achv[indx] + 1));
+            unsigned int break_at = hist_item_sort_halfvar(&achv[indx], clrs, halfvar);
+            break_at = MIN(clrs-1, break_at + 1);
 
             /*
              ** Split the box.
@@ -391,11 +397,8 @@ LIQ_PRIVATE colormap *mediancut(histogram *hist, unsigned int newcolors, const d
             double lowersum = 0;
             for(unsigned int i=0; i < break_at; i++) lowersum += achv[indx + i].adjusted_weight;
 
-            #pragma omp taskgroup
-            {
-                box_init(&bv[bi], achv, indx, break_at, lowersum);
-                box_init(&bv[boxes], achv, indx + break_at, clrs - break_at, sm - lowersum);
-            }
+            box_init(&bv[bi], achv, indx, break_at, lowersum);
+            box_init(&bv[boxes], achv, indx + break_at, clrs - break_at, sm - lowersum);
 
             ++boxes;
 
@@ -403,7 +406,6 @@ LIQ_PRIVATE colormap *mediancut(histogram *hist, unsigned int newcolors, const d
                 break;
             }
         }
-    }
 
     colormap *map = pam_colormap(boxes, malloc, free);
     set_colormap_from_boxes(map, bv, boxes, achv);

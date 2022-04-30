@@ -23,7 +23,10 @@ let package = Package(
         // Targets can depend on other targets in this package, and on products in packages this package depends on.
         .target(
             name: "pngquant",
-            dependencies: [.target(name: "pngquantc")]),
+            dependencies: [.target(name: "pngquantc")],
+            swiftSettings: [
+                  .unsafeFlags(["-suppress-warnings"]),
+              ]),
         .target(
             name: "pngquantc",
             dependencies: [],
@@ -34,6 +37,9 @@ let package = Package(
                 "kmeans.h",
                 "libimagequant.c",
                 "libimagequant.h",
+                "libimagequant_private.h",
+                "remap.c",
+                "remap.h",
                 "lodepng.c",
                 "lodepng.h",
                 "mediancut.c",
@@ -49,7 +55,8 @@ let package = Package(
             publicHeadersPath: "include",
             cSettings: [
                 .headerSearchPath("."),
-                .define("NDEBUG")
+                .define("NDEBUG"),
+                .unsafeFlags(["-suppress-warnings"]),
             ]
         ),
         .testTarget(

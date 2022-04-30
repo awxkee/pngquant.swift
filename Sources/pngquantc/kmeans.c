@@ -51,21 +51,29 @@ LIQ_PRIVATE void kmeans_finalize(colormap *map, const unsigned int max_threads, 
             total += average_color[offset].total;
         }
 
-        if (total && !map->palette[i].fixed) {
-            map->palette[i].acolor = (f_pixel){
-                .a = a / total,
-                .r = r / total,
-                .g = g / total,
-                .b = b / total,
-            };
+        if (!map->palette[i].fixed) {
             map->palette[i].popularity = total;
+            if (total) {
+                map->palette[i].acolor = (f_pixel){
+                    .a = a / total,
+                    .r = r / total,
+                    .g = g / total,
+                    .b = b / total,
+                };
+            } else {
+                // if a color is useless, make a new one
+                // (it was supposed to be random, but Android NDK has problematic stdlib headers)
+                map->palette[i].acolor.a = map->palette[(i+1)%map->colors].acolor.a;
+                map->palette[i].acolor.r = map->palette[(i+2)%map->colors].acolor.r;
+                map->palette[i].acolor.g = map->palette[(i+3)%map->colors].acolor.g;
+                map->palette[i].acolor.b = map->palette[(i+4)%map->colors].acolor.b;
+            }
         }
     }
 }
 
-LIQ_PRIVATE double kmeans_do_iteration(histogram *hist, colormap *const map, kmeans_callback callback)
+LIQ_PRIVATE double kmeans_do_iteration(histogram *hist, colormap *const map, kmeans_callback callback, unsigned int max_threads)
 {
-    const unsigned int max_threads = omp_get_max_threads();
     LIQ_ARRAY(kmeans_state, average_color, (KMEANS_CACHE_LINE_GAP+map->colors) * max_threads);
     kmeans_init(map, max_threads, average_color);
     struct nearest_map *const n = nearest_init(map);
@@ -73,7 +81,7 @@ LIQ_PRIVATE double kmeans_do_iteration(histogram *hist, colormap *const map, kme
     const int hist_size = hist->size;
 
     double total_diff=0;
-#if __GNUC__ >= 9
+#if __GNUC__ >= 9 || __clang__
     #pragma omp parallel for if (hist_size > 2000) \
         schedule(static) default(none) shared(achv,average_color,callback,hist_size,map,n) reduction(+:total_diff)
 #else
@@ -82,13 +90,26 @@ LIQ_PRIVATE double kmeans_do_iteration(histogram *hist, colormap *const map, kme
 #endif
     for(int j=0; j < hist_size; j++) {
         float diff;
-        unsigned int match = nearest_search(n, &achv[j].acolor, achv[j].tmp.likely_colormap_index, &diff);
+        const f_pixel px = achv[j].acolor;
+        const unsigned int match = nearest_search(n, &px, achv[j].tmp.likely_colormap_index, &diff);
         achv[j].tmp.likely_colormap_index = match;
+
+        if (callback) {
+            // Check how average diff would look like if there was dithering
+            const f_pixel remapped = map->palette[match].acolor;
+            nearest_search(n, &(f_pixel){
+                .a = px.a + px.a - remapped.a,
+                .r = px.r + px.r - remapped.r,
+                .g = px.g + px.g - remapped.g,
+                .b = px.b + px.b - remapped.b,
+            }, match, &diff);
+
+            callback(&achv[j], diff);
+        }
+
         total_diff += diff * achv[j].perceptual_weight;
 
-        kmeans_update_color(achv[j].acolor, achv[j].perceptual_weight, map, match, omp_get_thread_num(), average_color);
-
-        if (callback) callback(&achv[j], diff);
+        kmeans_update_color(px, achv[j].adjusted_weight, map, match, omp_get_thread_num(), average_color);
     }
 
     nearest_free(n);
