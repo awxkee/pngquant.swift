@@ -1,17 +1,18 @@
 //
 //  PNGQuantBinding.m
-//  
+//
 //
 //  Created by Radzivon Bartoshyk on 27/04/2022.
 //
 
 #include "PNGQuantBinding.h"
 #include "libimagequant.h"
-#include "lodepng.h"
+#include "spng.h"
+@import zlib;
 
-@implementation UIImage (ColorData)
+@implementation PNGImage (PngQuant)
 
-- (unsigned char *)rgbaPixels {
+- (unsigned char *)pngRgbaPixels {
     CGImageRef imageRef = [self CGImage];
     NSUInteger width = CGImageGetWidth(imageRef);
     NSUInteger height = CGImageGetHeight(imageRef);
@@ -30,20 +31,65 @@
     return rawData;
 }
 
-@end
-
-
-NSData * quantizedImageData(UIImage *image, int speed)
+-(NSData * _Nullable) pngRGBA:(int)speed;
 {
-    CGImageRef imageRef = image.CGImage;
+    int _width = (int)(self.size.width * self.scale);
+    int _height = (int)(self.size.height * self.scale);
     
-    size_t _bitsPerPixel           = CGImageGetBitsPerPixel(imageRef);
-    size_t _bitsPerComponent       = CGImageGetBitsPerComponent(imageRef);
-    int _width = (int)(image.size.width * image.scale);
-    int _height = (int)(image.size.height * image.scale);
-    size_t _bytesPerRow            = CGImageGetBytesPerRow(imageRef);
+    unsigned char *bitmap = [self pngRgbaPixels];
     
-    unsigned char *bitmap = [image rgbaPixels];
+    spng_ctx *ctx = NULL;
+    struct spng_ihdr ihdr = {0};
+    ctx = spng_ctx_new(SPNG_CTX_ENCODER);
+    
+    spng_set_option(ctx, SPNG_ENCODE_TO_BUFFER, 1);
+    
+    ihdr.width = _width;
+    ihdr.height = _height;
+    ihdr.color_type = SPNG_COLOR_TYPE_TRUECOLOR_ALPHA;
+    ihdr.bit_depth = 8;
+    
+    spng_set_ihdr(ctx, &ihdr);
+    spng_set_option(ctx, SPNG_IMG_COMPRESSION_LEVEL, speed);
+    
+    int ret = spng_encode_image(ctx, bitmap, _width*_height*4, SPNG_FMT_PNG, SPNG_ENCODE_FINALIZE);
+    if (ret) {
+        spng_ctx_free(ctx);
+        
+        NSLog(@"error can't encode image %s", "real error");
+        free(bitmap);
+        return nil;
+    }
+    
+    size_t png_size;
+    void *png_buf = NULL;
+    
+    /* Get the internal buffer of the finished PNG */
+    png_buf = spng_get_png_buffer(ctx, &png_size, &ret);
+    
+    if(png_buf == NULL)
+    {
+        spng_ctx_free(ctx);
+        free(bitmap);
+        return nil;
+    }
+    
+    free(bitmap);
+    
+    NSData *data_out = [[NSData alloc] initWithBytes:png_buf length:png_size];
+
+    free(png_buf);
+    spng_ctx_free(ctx);
+        
+    return data_out;
+}
+
+-(NSData * _Nullable) quantizedImageData:(int)speed;
+{
+    int _width = (int)(self.size.width * self.scale);
+    int _height = (int)(self.size.height * self.scale);
+    
+    unsigned char *bitmap = [self pngRgbaPixels];
     
     size_t _gamma = 0;
     
@@ -77,33 +123,39 @@ NSData * quantizedImageData(UIImage *image, int speed)
     liq_write_remapped_image(quantization_result, img, raw_8bit_pixels, pixels_size);
     const liq_palette *palette = liq_get_palette(quantization_result);
     
-    //save convert pixels to png file
-    LodePNGState state;
-    lodepng_state_init(&state);
-    state.info_raw.colortype = LCT_PALETTE;
-    state.info_raw.bitdepth = 8;
-    state.info_png.color.colortype = LCT_PALETTE;
-    state.info_png.color.bitdepth = 8;
+    spng_ctx *ctx = NULL;
+    struct spng_ihdr ihdr = {0};
+    ctx = spng_ctx_new(SPNG_CTX_ENCODER);
     
+    spng_set_option(ctx, SPNG_ENCODE_TO_BUFFER, 1);
+    
+    ihdr.width = _width;
+    ihdr.height = _height;
+    ihdr.color_type = SPNG_COLOR_TYPE_INDEXED;
+    ihdr.bit_depth = 8;
+    
+    spng_set_ihdr(ctx, &ihdr);
+    spng_set_option(ctx, SPNG_IMG_COMPRESSION_LEVEL, 6);
+    
+    struct spng_plte plte;
+    plte.n_entries = palette->count;
     for (size_t i = 0; i < palette->count; ++i)
     {
-        lodepng_palette_add(&state.info_png.color, palette->entries[i].r, palette->entries[i].g, palette->entries[i].b, palette->entries[i].a);
-        
-        lodepng_palette_add(&state.info_raw, palette->entries[i].r, palette->entries[i].g, palette->entries[i].b, palette->entries[i].a);
+        plte.entries[i].alpha = palette->entries[i].a;
+        plte.entries[i].red = palette->entries[i].r;
+        plte.entries[i].green = palette->entries[i].g;
+        plte.entries[i].blue = palette->entries[i].b;
     }
+    spng_set_plte(ctx, &plte);
     
-    unsigned char *output_file_data;
-    size_t output_file_size;
-    unsigned int out_state = lodepng_encode(&output_file_data,
-                                            &output_file_size,
-                                            raw_8bit_pixels,
-                                            (int)_width,
-                                            (int)_height,
-                                            &state);
-    
-    if (out_state)
-    {
-        NSLog(@"error can't encode image %s", lodepng_error_text(out_state));
+    int ret = spng_encode_image(ctx, raw_8bit_pixels, pixels_size, SPNG_FMT_PNG, SPNG_ENCODE_FINALIZE);
+    if (ret) {
+        spng_ctx_free(ctx);
+        
+        liq_result_destroy(quantization_result);
+        liq_image_destroy(img);
+        liq_attr_destroy(liq);
+        NSLog(@"error can't encode image %s", "real error");
         if (raw_8bit_pixels) {
             free(raw_8bit_pixels);
         }
@@ -111,31 +163,47 @@ NSData * quantizedImageData(UIImage *image, int speed)
         return nil;
     }
     
-    NSData *data_out = [[NSData alloc] initWithBytes:output_file_data length:output_file_size];
+    size_t png_size;
+    void *png_buf = NULL;
     
-    liq_result_destroy(quantization_result);
-    liq_image_destroy(img);
-    liq_attr_destroy(liq);
+    /* Get the internal buffer of the finished PNG */
+    png_buf = spng_get_png_buffer(ctx, &png_size, &ret);
+    
+    if(png_buf == NULL)
+    {
+        spng_ctx_free(ctx);
+        
+        liq_result_destroy(quantization_result);
+        liq_image_destroy(img);
+        liq_attr_destroy(liq);
+        NSLog(@"error can't encode image %s", "real error");
+        if (raw_8bit_pixels) {
+            free(raw_8bit_pixels);
+        }
+        free(bitmap);
+        return nil;
+    }
     
     free(raw_8bit_pixels);
     free(bitmap);
     
-    lodepng_state_cleanup(&state);
+    NSData *data_out = [[NSData alloc] initWithBytes:png_buf length:png_size];
     
+    liq_result_destroy(quantization_result);
+    liq_image_destroy(img);
+    liq_attr_destroy(liq);
+    free(png_buf);
+    spng_ctx_free(ctx);
+        
     return data_out;
 }
 
-NSError * _Nullable quantizedImageTo(NSString * _Nonnull path, UIImage * _Nonnull image, int speed)
+-(NSError * _Nullable) quantizedImageTo:(NSString * _Nonnull)path speed:(int) speed;
 {
-    CGImageRef imageRef = image.CGImage;
+    int _width = (int)(self.size.width * self.scale);
+    int _height = (int)(self.size.height * self.scale);
     
-    size_t _bitsPerPixel           = CGImageGetBitsPerPixel(imageRef);
-    size_t _bitsPerComponent       = CGImageGetBitsPerComponent(imageRef);
-    int _width = (int)(image.size.width * image.scale);
-    int _height = (int)(image.size.height * image.scale);
-    size_t _bytesPerRow            = CGImageGetBytesPerRow(imageRef);
-    
-    unsigned char *bitmap = [image rgbaPixels];
+    unsigned char *bitmap = [self pngRgbaPixels];
     
     size_t _gamma = 0;
     
@@ -151,14 +219,16 @@ NSError * _Nullable quantizedImageTo(NSString * _Nonnull path, UIImage * _Nonnul
     if (!img)
     {
         free(bitmap);
-        return [[NSError alloc] initWithDomain:@"quantizedImageTo" code:500 userInfo:@{ NSLocalizedDescriptionKey: NSLocalizedString(@"`quantizedImageTo` failed with create image", nil) }];;
+        return [[NSError alloc] initWithDomain:@"quantizedImageTo" code:500 userInfo:@{ NSLocalizedDescriptionKey: NSLocalizedString(@"`quantizedImageTo` failed with create image", nil) }];
     }
     
     liq_result *quantization_result;
     if (liq_image_quantize(img, liq, &quantization_result) != LIQ_OK)
     {
         free(bitmap);
-        return [[NSError alloc] initWithDomain:@"quantizedImageTo" code:500 userInfo:@{ NSLocalizedDescriptionKey: NSLocalizedString(@"`liq_image_quantize` failed", nil) }];;
+        liq_image_destroy(img);
+        liq_attr_destroy(liq);
+        return [[NSError alloc] initWithDomain:@"quantizedImageTo" code:500 userInfo:@{ NSLocalizedDescriptionKey: NSLocalizedString(@"`liq_image_quantize` failed", nil) }];
     }
     
     size_t pixels_size = _width * _height;
@@ -168,52 +238,66 @@ NSError * _Nullable quantizedImageTo(NSString * _Nonnull path, UIImage * _Nonnul
     liq_write_remapped_image(quantization_result, img, raw_8bit_pixels, pixels_size);
     const liq_palette *palette = liq_get_palette(quantization_result);
     
-    //save convert pixels to png file
-    LodePNGState state;
-    lodepng_state_init(&state);
-    state.info_raw.colortype = LCT_PALETTE;
-    state.info_raw.bitdepth = 8;
-    state.info_png.color.colortype = LCT_PALETTE;
-    state.info_png.color.bitdepth = 8;
+    spng_ctx *ctx = NULL;
+    struct spng_ihdr ihdr = {0}; /* zero-initialize to set valid defaults */
+    /* Creating an encoder context requires a flag */
+    ctx = spng_ctx_new(SPNG_CTX_ENCODER);
     
-    for(int i=0; i < palette->count; i++) {
-        lodepng_palette_add(&state.info_png.color, palette->entries[i].r, palette->entries[i].g, palette->entries[i].b, palette->entries[i].a);
-        lodepng_palette_add(&state.info_raw, palette->entries[i].r, palette->entries[i].g, palette->entries[i].b, palette->entries[i].a);
+    FILE* pngFile = fopen([path UTF8String], "wb");
+    if (!pngFile) {
+        free(bitmap);
+        free(raw_8bit_pixels);
+        liq_result_destroy(quantization_result);
+        liq_image_destroy(img);
+        liq_attr_destroy(liq);
+        return [[NSError alloc] initWithDomain:@"quantizedImageTo" code:500 userInfo:@{ NSLocalizedDescriptionKey: @"Cannot open file" }];
     }
     
-    unsigned char *output_file_data;
-    size_t output_file_size;
-    unsigned int out_state = lodepng_encode(&output_file_data,
-                                            &output_file_size,
-                                            raw_8bit_pixels,
-                                            (int)_width,
-                                            (int)_height,
-                                            &state);
+    spng_set_png_file(ctx, pngFile);
     
-    if (out_state)
+    ihdr.width = _width;
+    ihdr.height = _height;
+    ihdr.color_type = SPNG_COLOR_TYPE_INDEXED;
+    ihdr.bit_depth = 8;
+    
+    spng_set_ihdr(ctx, &ihdr);
+    spng_set_option(ctx, SPNG_IMG_COMPRESSION_LEVEL, 6);
+    
+    struct spng_plte plte;
+    plte.n_entries = palette->count;
+    for (size_t i = 0; i < palette->count; ++i)
     {
+        plte.entries[i].alpha = palette->entries[i].a;
+        plte.entries[i].red = palette->entries[i].r;
+        plte.entries[i].green = palette->entries[i].g;
+        plte.entries[i].blue = palette->entries[i].b;
+    }
+    spng_set_plte(ctx, &plte);
+    
+    int ret = spng_encode_image(ctx, raw_8bit_pixels, pixels_size, SPNG_FMT_PNG, SPNG_ENCODE_FINALIZE);
+    if (ret) {
+        spng_ctx_free(ctx);
+        fclose(pngFile);
+        liq_result_destroy(quantization_result);
+        liq_image_destroy(img);
+        liq_attr_destroy(liq);
+        NSLog(@"error can't encode image %s", "real error");
         if (raw_8bit_pixels) {
             free(raw_8bit_pixels);
         }
         free(bitmap);
-        NSLog(@"error can't encode image %s", lodepng_error_text(out_state));
-        return [[NSError alloc] initWithDomain:@"quantizedImageTo" code:500 userInfo:@{ NSLocalizedDescriptionKey: [NSString stringWithUTF8String:lodepng_error_text(out_state)] }];;
+        return [[NSError alloc] initWithDomain:@"quantizedImageTo" code:500 userInfo:@{ NSLocalizedDescriptionKey: @"PNG Encoding Failed" }];
     }
-    
-    if (lodepng_save_file(output_file_data, output_file_size, [path UTF8String]) != LIQ_OK) {
-        free(raw_8bit_pixels);
-        free(bitmap);
-        return [[NSError alloc] initWithDomain:@"quantizedImageTo" code:500 userInfo:@{ NSLocalizedDescriptionKey: @"LODE PNG SAVE FILE ERROR" }];;
-    }
-    
+    fclose(pngFile);
     liq_result_destroy(quantization_result);
     liq_image_destroy(img);
     liq_attr_destroy(liq);
-    
     free(raw_8bit_pixels);
     free(bitmap);
-    
-    lodepng_state_cleanup(&state);
+    spng_ctx_free(ctx);
     
     return nil;
 }
+
+
+@end

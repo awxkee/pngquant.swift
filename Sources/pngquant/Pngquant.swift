@@ -21,17 +21,17 @@ public extension UIImage {
      - Throws **CannotCompressError**: if error occured while compressing
      */
     func pngQuantData(atPath path: String, speed: Int = 4) throws {
-        if let error = quantizedImageTo(path, self, Int32(speed)) {
+        if let error = self.quantizedImage(to: path, speed: Int32(speed)) {
             throw error
         }
     }
     
     /**
      Compress **UIImage** with libpngquant to **Data**
-     - Throws **CannotCompressError**: if error occured while compressing
+     - Throws **PNGQuantinizationError**: if error occured while compressing
      */
     func pngQuantData(speed: Int = 4) throws -> Data {
-        guard let data = quantizedImageData(self, Int32(speed)) else {
+        guard let data = self.quantizedImageData(Int32(speed)) else {
             throw PNGQuantinizationError()
         }
         return data

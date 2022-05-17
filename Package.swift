@@ -29,27 +29,8 @@ let package = Package(
               ]),
         .target(
             name: "pngquantc",
-            dependencies: [],
+            dependencies: ["libimagequant", "libspng"],
             sources: [
-                "blur.c",
-                "blur.h",
-                "kmeans.c",
-                "kmeans.h",
-                "libimagequant.c",
-                "libimagequant.h",
-                "libimagequant_private.h",
-                "remap.c",
-                "remap.h",
-                "lodepng.c",
-                "lodepng.h",
-                "mediancut.c",
-                "mediancut.h",
-                "mempool.c",
-                "mempool.h",
-                "nearest.c",
-                "nearest.h",
-                "pam.c",
-                "pam.h",
                 "PNGQuantBinding.m"
             ],
             publicHeadersPath: "include",
@@ -58,6 +39,8 @@ let package = Package(
                 .define("NDEBUG"),
             ]
         ),
+        .binaryTarget(name: "libimagequant", path: "Sources/libimagequant.xcframework"),
+        .binaryTarget(name: "libspng", path: "Sources/libspng.xcframework"),
         .testTarget(
             name: "pnqquant.swiftTests",
             dependencies: ["pngquant"]),

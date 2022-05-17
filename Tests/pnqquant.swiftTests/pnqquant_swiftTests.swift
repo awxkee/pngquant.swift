@@ -1,5 +1,4 @@
 import XCTest
-@testable import pnqquant
 
 final class pnqquant_swiftTests: XCTestCase {
     func testExample() throws {
