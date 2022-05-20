@@ -51,12 +51,12 @@
     }
     
     auto finalBuffer = encoder.getEncodedImage();
-    if (!finalBuffer.getBuffer()) {
+    if (!finalBuffer->getBuffer()) {
         return nil;
     }
     
-    NSData *dataOut = [[NSData alloc] initWithBytes:finalBuffer.getBuffer() length:finalBuffer.getBufSize()];
-        
+    NSData *dataOut = [[NSData alloc] initWithBytes:finalBuffer->getBuffer() length:finalBuffer->getBufSize()];
+    delete finalBuffer;
     return dataOut;
 }
 
@@ -80,12 +80,12 @@
     }
 
     auto finalBuffer = encoder.getEncodedImage();
-    if (!finalBuffer.getBuffer()) {
+    if (!finalBuffer->getBuffer()) {
         return nil;
     }
     
-    NSData *dataOut = [[NSData alloc] initWithBytes:finalBuffer.getBuffer() length:finalBuffer.getBufSize()];
-        
+    NSData *dataOut = [[NSData alloc] initWithBytes:finalBuffer->getBuffer() length:finalBuffer->getBufSize()];
+    delete finalBuffer;
     return dataOut;
 }
 
@@ -106,7 +106,7 @@
         return [[NSError alloc] initWithDomain:@"quantizedImageTo" code:500 userInfo:@{ NSLocalizedDescriptionKey: @"Cannot open file" }];
     }
     encoder.setCompressionLevel(speed);
-    if (!encoder.encode(quantinizer, _width, _height)) {
+    if (!encoder.encode(&quantinizer, _width, _height)) {
         return [[NSError alloc] initWithDomain:@"quantizedImageTo" code:500 userInfo:@{ NSLocalizedDescriptionKey: @"Cannot open file" }];
     }
 
