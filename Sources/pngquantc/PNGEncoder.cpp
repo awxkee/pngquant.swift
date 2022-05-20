@@ -67,7 +67,7 @@ bool PNGEncoder::encode(Quantinizer *quantinizer, int width, int height) {
     ihdr.bit_depth = 8;
     
     spng_set_ihdr(ctx, &ihdr);
-    
+    struct spng_plte plte;
     plte.n_entries = palette->count;
     for (size_t i = 0; i < palette->count; ++i)
     {
