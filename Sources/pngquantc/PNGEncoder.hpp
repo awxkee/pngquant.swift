@@ -21,9 +21,9 @@ public:
     void setTargetInternalBuffer();
     bool setTargetFile(const char* filename);
     void setCompressionLevel(int level);
-    bool encode(PNGSafeBuffer *buffer, int bufSize, int width, int height, int depth);
-    bool encode(Quantinizer *quantinizer, int width, int height);
-    PNGSafeBuffer* getEncodedImage();
+    bool encode(PNGSafeBuffer &buffer, int bufSize, int width, int height, int depth);
+    bool encode(Quantinizer &quantinizer, int width, int height);
+    PNGSafeBuffer getEncodedImage();
     ~PNGEncoder();
 private:
     spng_ctx* ctx;
