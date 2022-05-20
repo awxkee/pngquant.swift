@@ -31,7 +31,10 @@ let package = Package(
             name: "pngquantc",
             dependencies: ["libimagequant", "libspng"],
             sources: [
-                "PNGQuantBinding.m"
+                "PNGQuantBinding.mm",
+                "PNGEncoder.cpp",
+                "Quantinizer.cpp",
+                "PNGSafeBuffer.cpp"
             ],
             publicHeadersPath: "include",
             cSettings: [
