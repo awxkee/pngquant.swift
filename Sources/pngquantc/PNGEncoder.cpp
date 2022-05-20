@@ -86,11 +86,12 @@ bool PNGEncoder::encode(Quantinizer &quantinizer, int width, int height) {
     return true;
 }
 
-PNGSafeBuffer PNGEncoder::getEncodedImage() {
+PNGUnsafeBuffer PNGEncoder::getEncodedImage() {
     size_t pngSize;
     void *pngBuf = NULL;
     
     int ret;
     pngBuf = spng_get_png_buffer(ctx, &pngSize, &ret);
-    return PNGSafeBuffer(pngBuf, (int) pngSize);
+    PNGUnsafeBuffer buf = PNGUnsafeBuffer(pngBuf, (int) pngSize);
+    return buf;
 }

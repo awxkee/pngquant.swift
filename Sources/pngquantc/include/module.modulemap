@@ -1,5 +1,5 @@
 module pngquantc {
-    umbrella header "PNGQuantBinding.hxx"
+    umbrella header "PNGImage.hxx"
     link "z"
     export *
 }

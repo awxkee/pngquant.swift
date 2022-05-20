@@ -9,10 +9,9 @@
 #define PNGQuantBinding_h
 
 #import <Foundation/Foundation.h>
-#import <UIKit/UIKit.h>
 #import "TargetConditionals.h"
 
-#if TARGET_OS_MACCATALYST
+#if TARGET_OS_OSX
 #import <AppKit/AppKit.h>
 #define PNGImage   NSImage
 #else

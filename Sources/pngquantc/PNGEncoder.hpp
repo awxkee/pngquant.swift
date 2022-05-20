@@ -13,6 +13,7 @@
 #include "libimagequant.h"
 #include "PNGSafeBuffer.hpp"
 #include "Quantinizer.hpp"
+#include "PNGUnsafeBuffer.hpp"
 
 class PNGEncoder {
     
@@ -23,7 +24,7 @@ public:
     void setCompressionLevel(int level);
     bool encode(PNGSafeBuffer &buffer, int bufSize, int width, int height, int depth);
     bool encode(Quantinizer &quantinizer, int width, int height);
-    PNGSafeBuffer getEncodedImage();
+    PNGUnsafeBuffer getEncodedImage();
     ~PNGEncoder();
 private:
     spng_ctx* ctx;

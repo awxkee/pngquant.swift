@@ -6,7 +6,7 @@ import PackageDescription
 let package = Package(
     name: "pngquant",
     platforms: [
-        .iOS(.v12)
+        .iOS(.v12), .macCatalyst(.v14), .macOS(.v11)
     ],
     products: [
         // Products define the executables and libraries a package produces, and make them visible to other packages.
@@ -34,7 +34,8 @@ let package = Package(
                 "PNGQuantBinding.mm",
                 "PNGEncoder.cpp",
                 "Quantinizer.cpp",
-                "PNGSafeBuffer.cpp"
+                "PNGSafeBuffer.cpp",
+                "PNGUnsafeBuffer.cpp"
             ],
             publicHeadersPath: "include",
             cSettings: [

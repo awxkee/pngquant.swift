@@ -1,4 +1,10 @@
+#if os(macOS)
+import AppKit
+public typealias PNGQuantImage = NSImage
+#else
 import UIKit
+public typealias PNGQuantImage = UIImage
+#endif
 import Foundation
 #if SWIFT_PACKAGE
 import pngquantc
@@ -6,7 +12,7 @@ import pngquantc
 
 public struct PNGQuantinizationError: Error, Equatable { }
 
-public extension UIImage {
+public extension PNGQuantImage {
     
     /**
      Compress **UIImage** with libpngquant to file at *url*

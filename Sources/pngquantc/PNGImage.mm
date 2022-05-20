@@ -5,7 +5,7 @@
 //  Created by Radzivon Bartoshyk on 27/04/2022.
 //
 
-#include "PNGQuantBinding.hxx"
+#include "PNGImage.hxx"
 #include "libimagequant.h"
 #include "spng.h"
 #import <zlib.h>
@@ -15,6 +15,36 @@
 
 @implementation PNGImage (PngQuant)
 
+#if TARGET_OS_OSX
+- (unsigned char *)pngRgbaPixels {
+    auto rect = NSMakeRect(0, 0, self.size.width, self.size.height);
+    CGImageRef imageRef = [self CGImageForProposedRect: &rect context:nil hints:nil];
+    NSUInteger width = CGImageGetWidth(imageRef);
+    NSUInteger height = CGImageGetHeight(imageRef);
+    CGColorSpaceRef colorSpace = CGColorSpaceCreateDeviceRGB();
+    unsigned char *rawData = (unsigned char*) calloc(height * width * 4, sizeof(unsigned char));
+    NSUInteger bytesPerPixel = 4;
+    NSUInteger bytesPerRow = bytesPerPixel * width;
+    NSUInteger bitsPerComponent = 8;
+    CGContextRef context = CGBitmapContextCreate(rawData, width, height,
+                                                 bitsPerComponent, bytesPerRow, colorSpace,
+                                                 kCGImageAlphaPremultipliedLast | kCGBitmapByteOrder32Big);
+    CGColorSpaceRelease(colorSpace);
+    
+    CGContextDrawImage(context, CGRectMake(0, 0, width, height), imageRef);
+    CGContextRelease(context);
+    return rawData;
+}
+
+-(int)pngIntrinsicWidth {
+    return self.size.width;
+}
+
+-(int)pngIntrinsicHeight {
+    return self.size.height;
+}
+
+#else
 - (unsigned char *)pngRgbaPixels {
     CGImageRef imageRef = [self CGImage];
     NSUInteger width = CGImageGetWidth(imageRef);
@@ -33,11 +63,18 @@
     CGContextRelease(context);
     return rawData;
 }
+-(int)pngIntrinsicWidth {
+    return self.size.width * self.scale;
+}
+-(int)pngIntrinsicHeight {
+    return self.size.height * self.scale;
+}
+#endif
 
 -(NSData * _Nullable) pngRGBA:(int)speed;
 {
-    int _width = (int)(self.size.width * self.scale);
-    int _height = (int)(self.size.height * self.scale);
+    int _width = self.pngIntrinsicWidth;
+    int _height = self.pngIntrinsicHeight;
     
     unsigned char *bitmap = [self pngRgbaPixels];
     
@@ -55,14 +92,16 @@
         return nil;
     }
     
-    NSData *dataOut = [[NSData alloc] initWithBytes:finalBuffer.getBuffer() length:finalBuffer.getBufSize()];
+    NSData *dataOut = [[NSData alloc] initWithBytesNoCopy:finalBuffer.getBuffer() length:finalBuffer.getBufSize() deallocator:^(void * _Nonnull bytes, NSUInteger length) {
+        free(bytes);
+    }];
     return dataOut;
 }
 
 -(NSData * _Nullable) quantizedImageData:(int)speed;
 {
-    int _width = (int)(self.size.width * self.scale);
-    int _height = (int)(self.size.height * self.scale);
+    int _width = self.pngIntrinsicWidth;
+    int _height = self.pngIntrinsicHeight;
     
     unsigned char *bitmap = [self pngRgbaPixels];
     
@@ -83,14 +122,16 @@
         return nil;
     }
     
-    NSData *dataOut = [[NSData alloc] initWithBytes:finalBuffer.getBuffer() length:finalBuffer.getBufSize()];
+    NSData *dataOut = [[NSData alloc] initWithBytesNoCopy:finalBuffer.getBuffer() length:finalBuffer.getBufSize() deallocator:^(void * _Nonnull bytes, NSUInteger length) {
+        free(bytes);
+    }];
     return dataOut;
 }
 
 -(NSError * _Nullable) quantizedImageTo:(NSString * _Nonnull)path speed:(int) speed;
 {
-    int _width = (int)(self.size.width * self.scale);
-    int _height = (int)(self.size.height * self.scale);
+    int _width = self.pngIntrinsicWidth;
+    int _height = self.pngIntrinsicHeight;
     
     unsigned char *bitmap = [self pngRgbaPixels];
     
@@ -110,6 +151,5 @@
 
     return nil;
 }
-
 
 @end
