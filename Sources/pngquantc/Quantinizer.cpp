@@ -38,7 +38,7 @@ const liq_palette* Quantinizer::getPallete() {
     }
     isPalleteReady = true;
     img = liq_image_create_rgba(liq,
-                                           (void **)rgbaBuffer,
+                                           rgbaBuffer,
                                            (int)width,
                                            (int)height,
                                            gamma);

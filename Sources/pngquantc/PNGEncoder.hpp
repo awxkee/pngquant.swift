@@ -27,6 +27,8 @@ public:
     ~PNGEncoder();
 private:
     spng_ctx* ctx;
+    struct spng_plte plte;
+    struct spng_ihdr ihdr = {0};
     FILE* file;
 };
 

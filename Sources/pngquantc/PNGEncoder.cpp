@@ -62,8 +62,6 @@ bool PNGEncoder::encode(Quantinizer &quantinizer, int width, int height) {
         return false;
     }
     
-    struct spng_ihdr ihdr = {0};
-    
     ihdr.width = width;
     ihdr.height = height;
     ihdr.color_type = SPNG_COLOR_TYPE_INDEXED;
@@ -71,7 +69,6 @@ bool PNGEncoder::encode(Quantinizer &quantinizer, int width, int height) {
     
     spng_set_ihdr(ctx, &ihdr);
     
-    struct spng_plte plte;
     plte.n_entries = palette->count;
     for (size_t i = 0; i < palette->count; ++i)
     {
