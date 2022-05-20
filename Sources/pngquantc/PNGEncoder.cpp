@@ -38,8 +38,7 @@ void PNGEncoder::setCompressionLevel(int level) {
     spng_set_option(ctx, SPNG_IMG_COMPRESSION_LEVEL, level);
 }
 
-bool PNGEncoder::encode(PNGSafeBuffer &buffer, int bufSize, int width, int height, int depth) {
-    struct spng_ihdr ihdr = {0};
+bool PNGEncoder::encode(PNGSafeBuffer *buffer, int bufSize, int width, int height, int depth) {
     ihdr.width = width;
     ihdr.height = height;
     ihdr.color_type = SPNG_COLOR_TYPE_TRUECOLOR_ALPHA;
@@ -47,16 +46,16 @@ bool PNGEncoder::encode(PNGSafeBuffer &buffer, int bufSize, int width, int heigh
     
     spng_set_ihdr(ctx, &ihdr);
     
-    int ret = spng_encode_image(ctx, buffer.getBuffer(), width*height*4, SPNG_FMT_PNG, SPNG_ENCODE_FINALIZE);
+    int ret = spng_encode_image(ctx, buffer->getBuffer(), width*height*4, SPNG_FMT_PNG, SPNG_ENCODE_FINALIZE);
     if (ret) {
         return false;
     }
     return true;
 }
 
-bool PNGEncoder::encode(Quantinizer &quantinizer, int width, int height) {
+bool PNGEncoder::encode(Quantinizer *quantinizer, int width, int height) {
     
-    const liq_palette *palette = quantinizer.getPallete();
+    const liq_palette *palette = quantinizer->getPallete();
     if (!palette)
     {
         return false;
@@ -78,8 +77,8 @@ bool PNGEncoder::encode(Quantinizer &quantinizer, int width, int height) {
         plte.entries[i].blue = palette->entries[i].b;
     }
     spng_set_plte(ctx, &plte);
-    auto buffer = quantinizer.getQuantinizedBuffer();
-    auto bufSize = quantinizer.getQuantinizedBufferSize();
+    auto buffer = quantinizer->getQuantinizedBuffer();
+    auto bufSize = quantinizer->getQuantinizedBufferSize();
     int ret = spng_encode_image(ctx, buffer, bufSize, SPNG_FMT_PNG, SPNG_ENCODE_FINALIZE);
     if (ret) {
         return false;

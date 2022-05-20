@@ -46,7 +46,7 @@
     auto encoder = PNGEncoder();
     encoder.setTargetInternalBuffer();
     encoder.setCompressionLevel(speed);
-    if (!encoder.encode(safeBuffer, safeBuffer.getBufSize(), _width, _height, 8)) {
+    if (!encoder.encode(&safeBuffer, safeBuffer.getBufSize(), _width, _height, 8)) {
         return nil;
     }
     
@@ -75,7 +75,7 @@
     auto encoder = PNGEncoder();
     encoder.setTargetInternalBuffer();
     encoder.setCompressionLevel(speed);
-    if (!encoder.encode(quantinizer, _width, _height)) {
+    if (!encoder.encode(&quantinizer, _width, _height)) {
         return nil;
     }
 

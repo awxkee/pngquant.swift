@@ -21,8 +21,8 @@ public:
     void setTargetInternalBuffer();
     bool setTargetFile(const char* filename);
     void setCompressionLevel(int level);
-    bool encode(PNGSafeBuffer &buffer, int bufSize, int width, int height, int depth);
-    bool encode(Quantinizer &quantinizer, int width, int height);
+    bool encode(PNGSafeBuffer *buffer, int bufSize, int width, int height, int depth);
+    bool encode(Quantinizer *quantinizer, int width, int height);
     PNGSafeBuffer getEncodedImage();
     ~PNGEncoder();
 private:
