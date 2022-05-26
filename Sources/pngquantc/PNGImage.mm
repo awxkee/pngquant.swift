@@ -32,22 +32,12 @@
                                                  kCGImageAlphaPremultipliedLast | kCGBitmapByteOrder32Big);
     CGColorSpaceRelease(colorSpace);
     
-    CGContextSetFillColorWithColor(context, [[NSColor clearColor] CGColor]);
     CGContextFillRect(context, CGRectMake(0, 0, width, height));
     CGContextDrawImage(context, CGRectMake(0, 0, width, height), imageRef);
-    
-    CGImageRef cgNewImageRef = CGBitmapContextCreateImage(context);
 
-    auto unpremultiplied = [PNGImage quantUnpremultiplyRGBA:cgNewImageRef];
-    auto result = rawData;
-    if (unpremultiplied) {
-        free(rawData);
-        result = unpremultiplied;
-    }
-    
     CGColorSpaceRelease(colorSpace);
     CGContextRelease(context);
-    return result;
+    return rawData;
 }
 
 -(int)pngIntrinsicWidth {
@@ -75,18 +65,9 @@
     CGContextFillRect(context, CGRectMake(0, 0, width, height));
     CGContextDrawImage(context, CGRectMake(0, 0, width, height), imageRef);
     
-    CGImageRef cgNewImageRef = CGBitmapContextCreateImage(context);
-
-    auto unpremultiplied = [PNGImage quantUnpremultiplyRGBA:cgNewImageRef];
-    auto result = rawData;
-    if (unpremultiplied) {
-        free(rawData);
-        result = unpremultiplied;
-    }
-    
     CGColorSpaceRelease(colorSpace);
     CGContextRelease(context);
-    return result;
+    return rawData;
 }
 -(int)pngIntrinsicWidth {
     return self.size.width * self.scale;
