@@ -69,8 +69,8 @@ bool PNGEncoder::encode(Quantinizer &quantinizer, int width, int height) {
     ihdr.bit_depth = 8;
     
     spng_set_ihdr(ctx, &ihdr);
-    struct spng_plte plte;
-    struct spng_trns trns;
+    struct spng_plte plte = { 0 };
+    struct spng_trns trns = { 0 };
     for (int i = 0; i < palette->count; i++) {
         auto p = palette->entries[i];
         
@@ -91,7 +91,9 @@ bool PNGEncoder::encode(Quantinizer &quantinizer, int width, int height) {
 
     spng_set_plte(ctx, &plte);
     spng_set_gama(ctx, quantinizer.getGamma());
-    spng_set_trns(ctx, &trns);
+    if (trns.n_type3_entries) {
+        spng_set_trns(ctx, &trns);
+    }
     auto buffer = quantinizer.getQuantinizedBuffer();
     auto bufSize = quantinizer.getQuantinizedBufferSize();
     int ret = spng_encode_image(ctx, buffer, bufSize, SPNG_FMT_PNG, SPNG_ENCODE_FINALIZE);
