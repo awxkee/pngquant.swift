@@ -66,13 +66,12 @@
     
     CGImageRef cgNewImageRef = CGBitmapContextCreateImage(context);
     
-    CGBitmapInfo bitmapInfo = CGImageGetBitmapInfo(cgNewImageRef);
     vImage_CGImageFormat srcFormat = {
-          .bitsPerComponent = (uint32_t)bitsPerComponent,
-          .bitsPerPixel = (uint32_t)bytesPerPixel,
+          .bitsPerComponent = CGImageGetBitsPerComponent(cgNewImageRef),
+          .bitsPerPixel = CGImageGetBitsPerPixel(cgNewImageRef),
           .colorSpace = colorSpace,
-          .bitmapInfo = bitmapInfo,
-          .renderingIntent = CGImageGetRenderingIntent(cgNewImageRef)
+          .bitmapInfo = kCGImageAlphaPremultipliedLast | kCGBitmapByteOrder32Big,
+          .renderingIntent = kCGRenderingIntentDefault
       };
     auto vEerror = vImageBuffer_InitWithCGImage(&src, &srcFormat, NULL, cgNewImageRef, kvImageNoFlags);
     if (vEerror != kvImageNoError) {
