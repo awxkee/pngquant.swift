@@ -57,9 +57,10 @@
     CGContextRef context = CGBitmapContextCreate(rawData, width, height,
                                                  bitsPerComponent, bytesPerRow, colorSpace,
                                                  kCGImageAlphaLast | kCGBitmapByteOrder32Big);
-    CGColorSpaceRelease(colorSpace);
-    
+    CGContextSetFillColorWithColor(context, [[UIColor whiteColor] CGColor]);
+    CGContextFillRect(context, CGRectMake(0, 0, width, height));
     CGContextDrawImage(context, CGRectMake(0, 0, width, height), imageRef);
+    CGColorSpaceRelease(colorSpace);
     CGContextRelease(context);
     return rawData;
 }
