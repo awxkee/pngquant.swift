@@ -6,6 +6,8 @@
 //
 
 #include "PNGEncoder.hpp"
+#include <stdio.h>
+#include <string.h>
 
 PNGEncoder::PNGEncoder() {
     ctx = spng_ctx_new(SPNG_CTX_ENCODER);
@@ -78,6 +80,10 @@ bool PNGEncoder::encode(Quantinizer &quantinizer, int width, int height) {
     }
     spng_set_plte(ctx, &plte);
     spng_set_gama(ctx, quantinizer.getGamma());
+    struct spng_trns trns;
+    trns.n_type3_entries = sizeof(trns.type3_alpha);
+    memset((void*)&trns.type3_alpha[0], 255, sizeof(trns.type3_alpha));
+    spng_set_trns(ctx, &trns);
     auto buffer = quantinizer.getQuantinizedBuffer();
     auto bufSize = quantinizer.getQuantinizedBufferSize();
     int ret = spng_encode_image(ctx, buffer, bufSize, SPNG_FMT_PNG, SPNG_ENCODE_FINALIZE);
