@@ -63,15 +63,18 @@
     CGContextDrawImage(context, CGRectMake(0, 0, width, height), imageRef);
     
     vImage_Buffer src;
-    CGBitmapInfo bitmapInfo = CGImageGetBitmapInfo(imageRef);
+    
+    CGImageRef cgNewImageRef = CGBitmapContextCreateImage(context);
+    
+    CGBitmapInfo bitmapInfo = CGImageGetBitmapInfo(cgNewImageRef);
     vImage_CGImageFormat srcFormat = {
           .bitsPerComponent = (uint32_t)bitsPerComponent,
           .bitsPerPixel = (uint32_t)bytesPerPixel,
           .colorSpace = colorSpace,
           .bitmapInfo = bitmapInfo,
-          .renderingIntent = CGImageGetRenderingIntent(imageRef)
+          .renderingIntent = CGImageGetRenderingIntent(cgNewImageRef)
       };
-    auto vEerror = vImageBuffer_InitWithCGImage(&src, &srcFormat, NULL, imageRef, kvImageNoFlags);
+    auto vEerror = vImageBuffer_InitWithCGImage(&src, &srcFormat, NULL, cgNewImageRef, kvImageNoFlags);
     if (vEerror != kvImageNoError) {
         goto default_exit;
     }
