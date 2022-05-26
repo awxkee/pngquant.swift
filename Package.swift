@@ -41,7 +41,8 @@ let package = Package(
             cSettings: [
                 .headerSearchPath("."),
                 .define("NDEBUG"),
-            ]
+            ],
+            linkerSettings: [.linkedFramework("Accelerate")]
         ),
         .binaryTarget(name: "libimagequant", path: "Sources/libimagequant.xcframework"),
         .binaryTarget(name: "libspng", path: "Sources/libspng.xcframework"),

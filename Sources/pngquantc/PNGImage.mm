@@ -12,6 +12,7 @@
 #import "Quantinizer.hpp"
 #import "PNGEncoder.hpp"
 #import "PNGSafeBuffer.hpp"
+#import <Accelerate/Accelerate.h>
 
 @implementation PNGImage (PngQuant)
 
@@ -60,6 +61,39 @@
     CGContextSetFillColorWithColor(context, [[UIColor clearColor] CGColor]);
     CGContextFillRect(context, CGRectMake(0, 0, width, height));
     CGContextDrawImage(context, CGRectMake(0, 0, width, height), imageRef);
+    
+    vImage_Buffer src;
+    CGBitmapInfo bitmapInfo = CGImageGetBitmapInfo(imageRef);
+    vImage_CGImageFormat srcFormat = {
+          .bitsPerComponent = (uint32_t)bitsPerComponent,
+          .bitsPerPixel = (uint32_t)bytesPerPixel,
+          .colorSpace = colorSpace,
+          .bitmapInfo = bitmapInfo,
+          .renderingIntent = CGImageGetRenderingIntent(imageRef)
+      };
+    auto vEerror = vImageBuffer_InitWithCGImage(&src, &srcFormat, NULL, imageRef, kvImageNoFlags);
+    if (vEerror != kvImageNoError) {
+        goto default_exit;
+    }
+    
+    vImage_Buffer dest;
+    vEerror = vImageBuffer_Init(&dest, height, width, 32, kvImageNoFlags);
+    if (vEerror != kvImageNoError) {
+        goto default_exit;
+    }
+    
+    vEerror = vImageUnpremultiplyData_RGBA8888(&src, &dest, kvImageNoFlags);
+    if (vEerror != kvImageNoError) {
+        goto default_exit;
+    }
+    
+    free(src.data);
+    CGColorSpaceRelease(colorSpace);
+    CGContextRelease(context);
+    free(rawData);
+    return reinterpret_cast<unsigned char *>(dest.data);
+default_exit:
+    free(src.data);
     CGColorSpaceRelease(colorSpace);
     CGContextRelease(context);
     return rawData;
