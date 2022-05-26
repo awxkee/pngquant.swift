@@ -74,21 +74,18 @@ bool PNGEncoder::encode(Quantinizer &quantinizer, int width, int height) {
     for (int i = 0; i < palette->count; i++) {
         auto p = palette->entries[i];
         
-        if( p.a == 255 ) {
-            struct spng_plte_entry *entry =
-            &plte.entries[plte.n_entries];
-            
-            entry->red = p.r;
-            entry->green = p.g;
-            entry->blue = p.b;
-            plte.n_entries += 1;
-        }
-        else {
-            trns.type3_alpha[trns.n_type3_entries] = p.a;
-            trns.n_type3_entries += 1;
-        }
+        struct spng_plte_entry *entry =
+        &plte.entries[plte.n_entries];
+        
+        entry->red = p.r;
+        entry->green = p.g;
+        entry->blue = p.b;
+        plte.n_entries += 1;
+        
+        trns.type3_alpha[trns.n_type3_entries] = p.a;
+        trns.n_type3_entries += 1;
     }
-
+    
     spng_set_plte(ctx, &plte);
     spng_set_gama(ctx, quantinizer.getGamma());
     if (trns.n_type3_entries) {
