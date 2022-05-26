@@ -67,8 +67,8 @@
     CGImageRef cgNewImageRef = CGBitmapContextCreateImage(context);
     
     vImage_CGImageFormat srcFormat = {
-          .bitsPerComponent = CGImageGetBitsPerComponent(cgNewImageRef),
-          .bitsPerPixel = CGImageGetBitsPerPixel(cgNewImageRef),
+          .bitsPerComponent = (uint32_t)CGImageGetBitsPerComponent(cgNewImageRef),
+          .bitsPerPixel = (uint32_t)CGImageGetBitsPerPixel(cgNewImageRef),
           .colorSpace = colorSpace,
           .bitmapInfo = kCGImageAlphaPremultipliedLast | kCGBitmapByteOrder32Big,
           .renderingIntent = kCGRenderingIntentDefault

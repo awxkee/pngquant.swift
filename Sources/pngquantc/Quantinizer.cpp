@@ -26,6 +26,7 @@ Quantinizer::Quantinizer(void* rgbaBuffer, int width, int height) {
 
 void Quantinizer::setSpeed(int speed) {
     liq_set_speed(liq, std::max(std::min(speed, 10), 1));
+    liq_set_quality(liq, 60, 80);
 }
 
 const unsigned char* Quantinizer::getQuantinizedBuffer() {
@@ -58,6 +59,7 @@ const liq_palette* Quantinizer::getPallete() {
     
     liq_write_remapped_image(quantinizationResult, img, raw8BitPixels, getQuantinizedBufferSize());
     palette = (liq_palette*)liq_get_palette(quantinizationResult);
+    gamma = liq_get_output_gamma(quantinizationResult);
     return palette;
 }
 

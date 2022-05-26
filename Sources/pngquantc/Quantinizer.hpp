@@ -20,10 +20,13 @@ public:
     inline const int getQuantinizedBufferSize() {
         return width * height;
     };
+    double getGamma() {
+        return gamma;
+    }
     ~Quantinizer();
 private:
     bool isPalleteReady;
-    unsigned int gamma;
+    double gamma;
     void* rgbaBuffer;
     int width;
     int height;

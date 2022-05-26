@@ -77,6 +77,7 @@ bool PNGEncoder::encode(Quantinizer &quantinizer, int width, int height) {
         plte.entries[i].blue = palette->entries[i].b;
     }
     spng_set_plte(ctx, &plte);
+    spng_set_gama(ctx, quantinizer.getGamma());
     auto buffer = quantinizer.getQuantinizedBuffer();
     auto bufSize = quantinizer.getQuantinizedBufferSize();
     int ret = spng_encode_image(ctx, buffer, bufSize, SPNG_FMT_PNG, SPNG_ENCODE_FINALIZE);
