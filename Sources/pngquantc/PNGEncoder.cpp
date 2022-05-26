@@ -70,19 +70,27 @@ bool PNGEncoder::encode(Quantinizer &quantinizer, int width, int height) {
     
     spng_set_ihdr(ctx, &ihdr);
     struct spng_plte plte;
-    plte.n_entries = palette->count;
-    for (size_t i = 0; i < palette->count; ++i)
-    {
-        plte.entries[i].alpha = palette->entries[i].a;
-        plte.entries[i].red = palette->entries[i].r;
-        plte.entries[i].green = palette->entries[i].g;
-        plte.entries[i].blue = palette->entries[i].b;
+    struct spng_trns trns;
+    for (int i = 0; i < palette->count; i++) {
+        auto p = palette->entries[i];
+        
+        if( p.a == 255 ) {
+            struct spng_plte_entry *entry =
+            &plte.entries[plte.n_entries];
+            
+            entry->red = p.r;
+            entry->green = p.g;
+            entry->blue = p.b;
+            plte.n_entries += 1;
+        }
+        else {
+            trns.type3_alpha[trns.n_type3_entries] = p.a;
+            trns.n_type3_entries += 1;
+        }
     }
+
     spng_set_plte(ctx, &plte);
     spng_set_gama(ctx, quantinizer.getGamma());
-    struct spng_trns trns;
-    trns.n_type3_entries = sizeof(trns.type3_alpha);
-    memset((void*)&trns.type3_alpha[0], 255, sizeof(trns.type3_alpha));
     spng_set_trns(ctx, &trns);
     auto buffer = quantinizer.getQuantinizedBuffer();
     auto bufSize = quantinizer.getQuantinizedBufferSize();
