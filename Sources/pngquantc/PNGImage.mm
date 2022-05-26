@@ -56,8 +56,8 @@
     NSUInteger bitsPerComponent = 8;
     CGContextRef context = CGBitmapContextCreate(rawData, width, height,
                                                  bitsPerComponent, bytesPerRow, colorSpace,
-                                                 kCGImageAlphaLast | kCGBitmapByteOrder32Big);
-    CGContextSetFillColorWithColor(context, [[UIColor whiteColor] CGColor]);
+                                                 kCGImageAlphaPremultipliedLast | kCGBitmapByteOrder32Big);
+    CGContextSetFillColorWithColor(context, [[UIColor clearColor] CGColor]);
     CGContextFillRect(context, CGRectMake(0, 0, width, height));
     CGContextDrawImage(context, CGRectMake(0, 0, width, height), imageRef);
     CGColorSpaceRelease(colorSpace);
