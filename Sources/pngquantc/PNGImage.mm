@@ -62,10 +62,31 @@
     CGContextFillRect(context, CGRectMake(0, 0, width, height));
     CGContextDrawImage(context, CGRectMake(0, 0, width, height), imageRef);
     
-    vImage_Buffer src;
-    
     CGImageRef cgNewImageRef = CGBitmapContextCreateImage(context);
+
+    auto unpremultiplied = [PNGImage quantUnpremultiplyRGBA:cgNewImageRef];
+    auto result = rawData;
+    if (unpremultiplied) {
+        free(rawData);
+        result = unpremultiplied;
+    }
     
+    CGColorSpaceRelease(colorSpace);
+    CGContextRelease(context);
+    return result;
+}
+-(int)pngIntrinsicWidth {
+    return self.size.width * self.scale;
+}
+-(int)pngIntrinsicHeight {
+    return self.size.height * self.scale;
+}
+#endif
+
++(unsigned char*)quantUnpremultiplyRGBA:(CGImageRef)cgNewImageRef {
+    CGColorSpaceRef colorSpace = CGColorSpaceCreateDeviceRGB();
+    vImage_Buffer src;
+    void* result = nullptr;
     vImage_CGImageFormat srcFormat = {
           .bitsPerComponent = (uint32_t)CGImageGetBitsPerComponent(cgNewImageRef),
           .bitsPerPixel = (uint32_t)CGImageGetBitsPerPixel(cgNewImageRef),
@@ -75,38 +96,26 @@
       };
     auto vEerror = vImageBuffer_InitWithCGImage(&src, &srcFormat, NULL, cgNewImageRef, kvImageNoFlags);
     if (vEerror != kvImageNoError) {
-        goto default_exit;
+        goto unpremultiply_exit;
     }
     
     vImage_Buffer dest;
-    vEerror = vImageBuffer_Init(&dest, height, width, 32, kvImageNoFlags);
+    vEerror = vImageBuffer_Init(&dest, CGImageGetHeight(cgNewImageRef), CGImageGetWidth(cgNewImageRef), 32, kvImageNoFlags);
     if (vEerror != kvImageNoError) {
-        goto default_exit;
+        goto unpremultiply_exit;
     }
     
     vEerror = vImageUnpremultiplyData_RGBA8888(&src, &dest, kvImageNoFlags);
     if (vEerror != kvImageNoError) {
-        goto default_exit;
+        goto unpremultiply_exit;
     }
+    result = dest.data;
     
+unpremultiply_exit:
     free(src.data);
     CGColorSpaceRelease(colorSpace);
-    CGContextRelease(context);
-    free(rawData);
-    return reinterpret_cast<unsigned char *>(dest.data);
-default_exit:
-    free(src.data);
-    CGColorSpaceRelease(colorSpace);
-    CGContextRelease(context);
-    return rawData;
+    return reinterpret_cast<unsigned char*>(result);
 }
--(int)pngIntrinsicWidth {
-    return self.size.width * self.scale;
-}
--(int)pngIntrinsicHeight {
-    return self.size.height * self.scale;
-}
-#endif
 
 -(NSData * _Nullable) pngRGBA:(int)speed;
 {
