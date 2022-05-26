@@ -29,7 +29,7 @@
     NSUInteger bitsPerComponent = 8;
     CGContextRef context = CGBitmapContextCreate(rawData, width, height,
                                                  bitsPerComponent, bytesPerRow, colorSpace,
-                                                 kCGImageAlphaLast | kCGBitmapByteOrder32Big);
+                                                 kCGImageAlphaPremultipliedLast | kCGBitmapByteOrder32Big);
     CGColorSpaceRelease(colorSpace);
     
     CGContextSetFillColorWithColor(context, [[NSColor clearColor] CGColor]);
