@@ -96,14 +96,17 @@ png_rgba_pixels_exit:
       };
     auto vEerror = vImageBuffer_InitWithCGImage(&src, &srcFormat, NULL, cgNewImageRef, kvImageNoFlags);
     if (vEerror != kvImageNoError) {
-        goto unpremultiply_exit;
+        free(src.data);
+        CGColorSpaceRelease(colorSpace);
+        return nullptr;
     }
     
-    vImage_Buffer dest;
-    vEerror = vImageBuffer_Init(&dest, CGImageGetHeight(cgNewImageRef), CGImageGetWidth(cgNewImageRef), 32, kvImageNoFlags);
-    if (vEerror != kvImageNoError) {
-        goto unpremultiply_exit;
-    }
+    vImage_Buffer dest = {
+        .data = malloc(CGImageGetWidth(cgNewImageRef) * CGImageGetHeight(cgNewImageRef) * 4),
+        .width = CGImageGetWidth(cgNewImageRef),
+        .height = CGImageGetHeight(cgNewImageRef),
+        .rowBytes = CGImageGetWidth(cgNewImageRef) * 4
+    };
     vEerror = vImageUnpremultiplyData_RGBA8888(&src, &dest, kvImageNoFlags);
     if (vEerror != kvImageNoError) {
         goto unpremultiply_exit;
