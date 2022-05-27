@@ -31,8 +31,7 @@
                                                  bitsPerComponent, bytesPerRow, colorSpace,
                                                  kCGImageAlphaPremultipliedLast | kCGBitmapByteOrder32Big);
     CGColorSpaceRelease(colorSpace);
-    
-    CGContextFillRect(context, CGRectMake(0, 0, width, height));
+
     CGContextDrawImage(context, CGRectMake(0, 0, width, height), imageRef);
 
     CGColorSpaceRelease(colorSpace);
@@ -61,8 +60,7 @@
     CGContextRef context = CGBitmapContextCreate(rawData, width, height,
                                                  bitsPerComponent, bytesPerRow, colorSpace,
                                                  kCGImageAlphaPremultipliedLast | kCGBitmapByteOrder32Big);
-    CGContextSetFillColorWithColor(context, [[UIColor clearColor] CGColor]);
-    CGContextFillRect(context, CGRectMake(0, 0, width, height));
+
     CGContextDrawImage(context, CGRectMake(0, 0, width, height), imageRef);
     
     CGColorSpaceRelease(colorSpace);
@@ -98,7 +96,6 @@
     if (vEerror != kvImageNoError) {
         goto unpremultiply_exit;
     }
-    
     vEerror = vImageUnpremultiplyData_RGBA8888(&src, &dest, kvImageNoFlags);
     if (vEerror != kvImageNoError) {
         goto unpremultiply_exit;
