@@ -63,6 +63,14 @@
 
     CGContextDrawImage(context, CGRectMake(0, 0, width, height), imageRef);
     
+    auto unpremultiplied = [PNGImage quantUnpremultiplyRGBA:imageRef];
+    if (unpremultiplied) {
+        free(rawData);
+        rawData = unpremultiplied;
+    }
+    
+png_rgba_pixels_exit:
+    
     CGColorSpaceRelease(colorSpace);
     CGContextRelease(context);
     return rawData;
@@ -92,7 +100,7 @@
     }
     
     vImage_Buffer dest;
-    vEerror = vImageBuffer_Init(&dest, CGImageGetHeight(cgNewImageRef), CGImageGetWidth(cgNewImageRef), 32, kvImageNoFlags);
+    vEerror = vImageBuffer_Init(&dest, CGImageGetHeight(cgNewImageRef), CGImageGetWidth(cgNewImageRef), 8, kvImageNoFlags);
     if (vEerror != kvImageNoError) {
         goto unpremultiply_exit;
     }
