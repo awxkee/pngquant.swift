@@ -109,7 +109,10 @@ png_rgba_pixels_exit:
     };
     vEerror = vImageUnpremultiplyData_RGBA8888(&src, &dest, kvImageNoFlags);
     if (vEerror != kvImageNoError) {
-        goto unpremultiply_exit;
+        free(src.data);
+        free(dest.data);
+        CGColorSpaceRelease(colorSpace);
+        return nullptr;
     }
     result = dest.data;
     
