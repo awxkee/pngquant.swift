@@ -100,7 +100,7 @@ png_rgba_pixels_exit:
     }
     
     vImage_Buffer dest;
-    vEerror = vImageBuffer_Init(&dest, CGImageGetHeight(cgNewImageRef), CGImageGetWidth(cgNewImageRef), 8, kvImageNoFlags);
+    vEerror = vImageBuffer_Init(&dest, CGImageGetHeight(cgNewImageRef), CGImageGetWidth(cgNewImageRef), 32, kvImageNoFlags);
     if (vEerror != kvImageNoError) {
         goto unpremultiply_exit;
     }
