@@ -70,7 +70,6 @@
     }
     
 png_rgba_pixels_exit:
-    
     CGColorSpaceRelease(colorSpace);
     CGContextRelease(context);
     return rawData;

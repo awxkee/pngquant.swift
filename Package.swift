@@ -23,10 +23,7 @@ let package = Package(
         // Targets can depend on other targets in this package, and on products in packages this package depends on.
         .target(
             name: "pngquant",
-            dependencies: [.target(name: "pngquantc")],
-            swiftSettings: [
-                  .unsafeFlags(["-suppress-warnings"]),
-              ]),
+            dependencies: [.target(name: "pngquantc")]),
         .target(
             name: "pngquantc",
             dependencies: ["libimagequant", "libspng"],
