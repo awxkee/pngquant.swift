@@ -2,7 +2,11 @@
 
 ## What's This?
 
-pngquant.swift the package to easy compress UIImage to PNG data with pnqquant
+pngquant.swift the package to easy compress UIImage to PNG data with pngquant
+
+Quantinized PNG will be much low size with the same quality
+
+Supported iOS, Mac Catalyst and MacOS
 
 ```swift
 // Compress data
