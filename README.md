@@ -12,3 +12,5 @@ let compressed:Data = try UIImage().pngQuantData()
 ## TODO
 - [ ] Handle files
 - [ ] Tests
+
+
