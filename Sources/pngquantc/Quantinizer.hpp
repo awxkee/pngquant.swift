@@ -17,6 +17,7 @@ public:
     void setSpeed(int speed);
     const liq_palette* getPallete();
     const unsigned char* getQuantinizedBuffer();
+    void setQuality(int minimum, int maximum);
     inline const int getQuantinizedBufferSize() {
         return width * height;
     };

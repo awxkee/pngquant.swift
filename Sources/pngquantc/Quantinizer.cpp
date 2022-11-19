@@ -26,7 +26,10 @@ Quantinizer::Quantinizer(void* rgbaBuffer, int width, int height) {
 
 void Quantinizer::setSpeed(int speed) {
     liq_set_speed(liq, std::max(std::min(speed, 10), 1));
-    liq_set_quality(liq, 60, 80);
+}
+
+void Quantinizer::setQuality(int minimum, int maximum) {
+    liq_set_quality(liq, minimum, maximum);
 }
 
 const unsigned char* Quantinizer::getQuantinizedBuffer() {
@@ -48,8 +51,10 @@ const liq_palette* Quantinizer::getPallete() {
     {
         return nullptr;
     }
+
+    auto result = liq_image_quantize(img, liq, &quantinizationResult);
     
-    if (liq_image_quantize(img, liq, &quantinizationResult) != LIQ_OK)
+    if (result != LIQ_OK)
     {
         return nullptr;
     }
