@@ -18,25 +18,31 @@
 
 #if TARGET_OS_OSX
 - (unsigned char *)pngRgbaPixels {
-    auto rect = NSMakeRect(0, 0, self.size.width, self.size.height);
-    CGImageRef imageRef = [self CGImageForProposedRect: &rect context:nil hints:nil];
+    CGImageRef imageRef = [self makeCGImage];
     NSUInteger width = CGImageGetWidth(imageRef);
     NSUInteger height = CGImageGetHeight(imageRef);
+    int stride = (int)4 * (int)width * sizeof(uint8_t);
+    uint8_t *targetMemory = malloc((int)(stride * height));
+
     CGColorSpaceRef colorSpace = CGColorSpaceCreateDeviceRGB();
-    unsigned char *rawData = (unsigned char*) calloc(height * width * 4, sizeof(unsigned char));
-    NSUInteger bytesPerPixel = 4;
-    NSUInteger bytesPerRow = bytesPerPixel * width;
-    NSUInteger bitsPerComponent = 8;
-    CGContextRef context = CGBitmapContextCreate(rawData, width, height,
-                                                 bitsPerComponent, bytesPerRow, colorSpace,
-                                                 kCGImageAlphaPremultipliedLast | kCGBitmapByteOrder32Big);
+    CGBitmapInfo bitmapInfo = kCGImageAlphaPremultipliedLast | kCGBitmapByteOrder32Big;
+
+    CGContextRef targetContext = CGBitmapContextCreate(targetMemory, width, height, 8, stride, colorSpace, bitmapInfo);
+
+    [NSGraphicsContext saveGraphicsState];
+    [NSGraphicsContext setCurrentContext: [NSGraphicsContext graphicsContextWithCGContext:targetContext flipped:FALSE]];
     CGColorSpaceRelease(colorSpace);
 
-    CGContextDrawImage(context, CGRectMake(0, 0, width, height), imageRef);
+    [self drawInRect: NSMakeRect(0, 0, width, height)
+            fromRect: NSZeroRect
+           operation: NSCompositingOperationCopy
+            fraction: 1.0];
 
-    CGColorSpaceRelease(colorSpace);
-    CGContextRelease(context);
-    return rawData;
+    [NSGraphicsContext restoreGraphicsState];
+
+    CGContextRelease(targetContext);
+
+    return targetMemory;
 }
 
 -(int)pngIntrinsicWidth {
@@ -53,7 +59,7 @@
     NSUInteger width = CGImageGetWidth(imageRef);
     NSUInteger height = CGImageGetHeight(imageRef);
     CGColorSpaceRef colorSpace = CGColorSpaceCreateDeviceRGB();
-    unsigned char *rawData = (unsigned char*) calloc(height * width * 4, sizeof(unsigned char));
+    unsigned char *rawData = reinterpret_cast<unsigned char*>(malloc(height * width * 4 * sizeof(unsigned char)));
     NSUInteger bytesPerPixel = 4;
     NSUInteger bytesPerRow = bytesPerPixel * width;
     NSUInteger bitsPerComponent = 8;
@@ -62,13 +68,6 @@
                                                  kCGImageAlphaPremultipliedLast | kCGBitmapByteOrder32Big);
 
     CGContextDrawImage(context, CGRectMake(0, 0, width, height), imageRef);
-    
-    auto unpremultiplied = [PNGImage quantUnpremultiplyRGBA:imageRef];
-    if (unpremultiplied) {
-        free(rawData);
-        rawData = unpremultiplied;
-    }
-    
 png_rgba_pixels_exit:
     CGColorSpaceRelease(colorSpace);
     CGContextRelease(context);
@@ -81,45 +80,6 @@ png_rgba_pixels_exit:
     return self.size.height * self.scale;
 }
 #endif
-
-+(unsigned char*)quantUnpremultiplyRGBA:(CGImageRef)cgNewImageRef {
-    CGColorSpaceRef colorSpace = CGColorSpaceCreateDeviceRGB();
-    vImage_Buffer src;
-    void* result = nullptr;
-    vImage_CGImageFormat srcFormat = {
-          .bitsPerComponent = (uint32_t)CGImageGetBitsPerComponent(cgNewImageRef),
-          .bitsPerPixel = (uint32_t)CGImageGetBitsPerPixel(cgNewImageRef),
-          .colorSpace = colorSpace,
-          .bitmapInfo = kCGImageAlphaPremultipliedLast | kCGBitmapByteOrder32Big,
-          .renderingIntent = kCGRenderingIntentDefault
-      };
-    auto vEerror = vImageBuffer_InitWithCGImage(&src, &srcFormat, NULL, cgNewImageRef, kvImageNoFlags);
-    if (vEerror != kvImageNoError) {
-        free(src.data);
-        CGColorSpaceRelease(colorSpace);
-        return nullptr;
-    }
-    
-    vImage_Buffer dest = {
-        .data = malloc(CGImageGetWidth(cgNewImageRef) * CGImageGetHeight(cgNewImageRef) * 4),
-        .width = CGImageGetWidth(cgNewImageRef),
-        .height = CGImageGetHeight(cgNewImageRef),
-        .rowBytes = CGImageGetWidth(cgNewImageRef) * 4
-    };
-    vEerror = vImageUnpremultiplyData_RGBA8888(&src, &dest, kvImageNoFlags);
-    if (vEerror != kvImageNoError) {
-        free(src.data);
-        free(dest.data);
-        CGColorSpaceRelease(colorSpace);
-        return nullptr;
-    }
-    result = dest.data;
-    
-unpremultiply_exit:
-    free(src.data);
-    CGColorSpaceRelease(colorSpace);
-    return reinterpret_cast<unsigned char*>(result);
-}
 
 -(NSData * _Nullable) pngRGBA:(int)speed;
 {
