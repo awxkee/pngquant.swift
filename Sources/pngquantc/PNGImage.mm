@@ -17,12 +17,19 @@
 @implementation PNGImage (PngQuant)
 
 #if TARGET_OS_OSX
+
+-(nullable CGImageRef)makeCGImage {
+    NSRect rect = NSMakeRect(0, 0, self.size.width, self.size.height);
+    CGImageRef imageRef = [self CGImageForProposedRect: &rect context:nil hints:nil];
+    return imageRef;
+}
+
 - (unsigned char *)pngRgbaPixels {
     CGImageRef imageRef = [self makeCGImage];
     NSUInteger width = CGImageGetWidth(imageRef);
     NSUInteger height = CGImageGetHeight(imageRef);
     int stride = (int)4 * (int)width * sizeof(uint8_t);
-    uint8_t *targetMemory = malloc((int)(stride * height));
+    uint8_t *targetMemory = static_cast<uint8_t*>(malloc((int)(stride * height)));
 
     CGColorSpaceRef colorSpace = CGColorSpaceCreateDeviceRGB();
     CGBitmapInfo bitmapInfo = kCGImageAlphaPremultipliedLast | kCGBitmapByteOrder32Big;
